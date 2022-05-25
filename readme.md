@@ -1,5 +1,5 @@
+
 ###### © Miguel Pardo 2022
-------------
 # Acerca de
 Este programa pretende proporcionar un positivado base para todo un rollo a color a la vez (para asegurar consistencia dentro de cada rollo), con ajustes relativamente sencillos para cosas difíciles de lograr en programas como Lightroom.
 El programa no pretende ser una solución para generar imágenes finales, por lo que se recomienda finalizar la edicición de las imágenes en Lr o Photoshop, los cuales ahora funcionarían de manera normal al ser una imágen positiva y no negativa. Tampoco pretende proporcionar imágenes fieles al proceso tradicional ni mantener características particulares de ciertos rollos, si el usuario así lo desea.
@@ -79,3 +79,24 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 	Si se activa, se devuelve al mezclador por defecto
 - X-Y:
 	Mezclador. Agrega un poco del canal Y al canal de salida X. Mismo funcionamiento que en Photoshop o programas similares. Por limitaciones de la interfaz, el punto medio (0%) es 250, por lo que 100% queda en 350.
+	
+## Cómo construir con Python:
+### Librerías:
+- Miniconda
+- Python 3.9
+- Numpy
+	- Nota: numpy instalado con conda incluye las librerías mkl, añadiendo ~700mb extra, a diferencia del numpy instalado con pip
+- OpenCV-python
+	- Nota: opencv instalado con conda hace que la interfaz sea más bonita, pero requiere numpy-mkl
+- TQDM
+- RawPy
+- PyInstaller
+-----
+1. Descargar e instalar todas las librerías
+2. Clonar este repositorio, o descargar `FilmProcesser.py` y `funcs.py` individualmente
+3. Probar si todo funciona con python y el script
+4. Buscar la ruta de instalación de OpenCV con 
+    `import cv2`
+    `print(cv2.__file__)`
+6. Abrir Anaconda prompt
+7. Ejecutar el comando `pyinstaller FilmProcesser.py -paths="<ruta de OpenCV>" --icon icon.png -F`
