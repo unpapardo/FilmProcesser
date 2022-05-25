@@ -39,23 +39,23 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 	- Finalmente el mezclador de canales
 - Esperar a que el programa exporte las fotos
 
-###Para la corrección de luminosidad:
+### Para la corrección de luminosidad:
 - Sacar una foto al portanegativo, pero sin un negativo presente
 - No es necesario que la foto tenga la misma exposición, pero se recomienda que tenga la misma apertura
 - La foto no debe recortarse en los blancos
 - Renombrar la foto como **"vig.cr2"**
 
-###Controles en el visualizador:
+### Controles en el visualizador:
 - Z para ir a la imagen anterior
 - X para ir a la imagen siguiente
 - Esc para finalizar (**TIENE QUE FINALIZARSE CON ESC**, de lo contrario habrán errores)
 
-##Sobre el tratamiento de los archivos:
+## Sobre el tratamiento de los archivos:
 - El programa mueve todos los CR2 presentes a una carpeta llamada "original"
 - Dentro de esa carpeta se crea un archivo .npy para las previsualizaciones de las fotos
 - También se crea un archivo "params.txt" con información sobre la colorización de las fotos
 
-###Descripción de barras (en orden de aparición):
+### Descripción de barras (en orden de aparición):
      
 - Clipping:
 	Activar este slider (valor 1) para mostrar áreas donde ocurra recorte de negros o blancos
@@ -66,10 +66,8 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - White Point:
 	Ajuste del nivel mínimo para recorte de blancos
 - All-gamma:
-
 	Gamma global de la imagen. El valor específico está definido por $$4^{gamma / 50 - 1.6}$$
 - R/G/B gamma:
-
 	Gamma por canal de la imagen. El valor específico está definido por $$3^{gamma / 50 - 1.6}$$
 - Autoset:
 	Si está activado, el mezclador se ajustará automáticamente para mantenerse en niveles adecuados
@@ -81,4 +79,3 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 	Si se activa, se devuelve al mezclador por defecto
 - X-Y:
 	Mezclador. Agrega un poco del canal Y al canal de salida X. Mismo funcionamiento que en Photoshop o programas similares. Por limitaciones de la interfaz, el punto medio (0%) es 250, por lo que 100% queda en 350.
-            
