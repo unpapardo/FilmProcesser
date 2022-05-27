@@ -19,16 +19,48 @@ def cmd(comando):
         print(out.stderr)
 
 
-def show(src, fac=100, full=True):
-    src = np.squeeze(src)
-    im_y = int(src.shape[0] * fac / 100)
-    im_x = int(src.shape[1] * fac / 100)
-    dim = (im_x, im_y)
-    src2 = cv2.resize(src, dim)
-    cv2.imshow("asdf", src2)
-    if full:
-        cv2.waitKey()
-        cv2.destroyAllWindows()
+def show(src, fac=100, verbose=False):
+    """
+    Shows a scaled image or sequence of images. Also prints the current index.
+
+    Parameters
+    ----------
+    src : np.ndarray
+        Single image or array of images.
+    fac : float, optional
+        Scaling factor for the selection in percentage. By default no scaling
+        is performed.
+    """
+    if src.ndim == 2:
+        src = src[None,...]
+    elif src.ndim == 3:
+        if src.shape[-1] == 3:
+            src = src[None,...]
+
+    ilen = len(src)
+    i_actual = 0
+
+    change = True
+    while 1:
+        if change:
+            if verbose:
+                print(i_actual)
+            cv2.imshow("asdf", resize(src[i_actual], fac))
+        change = False
+
+        key = cv2.waitKeyEx(1) & 0xFF
+        if key == 27:
+            break
+        if key == ord("z"):
+            change = True
+            i_actual -= 1
+            i_actual %= ilen
+        elif key == ord("x"):
+            change = True
+            i_actual += 1
+            i_actual %= ilen
+
+    cv2.destroyAllWindows()
 
 
 def resize(src, fac=30):
@@ -42,7 +74,7 @@ def resize(src, fac=30):
     return src
 
 
-def cropresize2(src, fac, crop, y, x):
+def cropresize(src, fac, crop, y=0, x=0):
     if fac == 100:
         return src.copy()
     fac /= 100
@@ -81,10 +113,10 @@ def CCM(src_arr, ccm):
     return out
 
 
-def gamma(src, gamma):
-    if gamma != 1:
+def gamma(src, loc_gamma):
+    if loc_gamma != 1:
         with np.errstate(invalid='ignore'):
-            src = src**(1 / gamma)
+            src = src**(1 / loc_gamma)
     return src
 
 
@@ -100,7 +132,7 @@ def nothing(p):
     pass
 
 
-def ccmGamma(src_arr, fac=100, crop=100, y=0, x=0):
+def ccmGamma(src_arr, fac=100):
     def gammaChange(p):
         gammaUpdate = True
 
@@ -109,51 +141,205 @@ def ccmGamma(src_arr, fac=100, crop=100, y=0, x=0):
 
     i = 0
 
-    cv2.namedWindow('image')
-    cv2.namedWindow('tracks', cv2.WINDOW_NORMAL)
+    if 1: #create trackbars
+        cv2.namedWindow('image')
+        cv2.namedWindow('tracks', cv2.WINDOW_NORMAL)
 
-    cv2.createTrackbar('Clipping', 'tracks', 0, 1, nothing)
+        cv2.createTrackbar('Clipping', 'tracks', 0, 1, nothing)
 
-    cv2.createTrackbar('Compress lo', 'tracks', 0, 100, gammaChange)
-    # cv2.createTrackbar('Compress hi', 'tracks', 0, 100, gammaChange)
+        cv2.createTrackbar('Black point', 'tracks', 25, 100, gammaChange)
+        cv2.createTrackbar('White point', 'tracks', 50, 100, gammaChange)
+        cv2.createTrackbar('Compress lo', 'tracks', 0, 100, gammaChange)
+        # cv2.createTrackbar('Compress hi', 'tracks', 0, 100, gammaChange)
 
-    cv2.createTrackbar('Black point', 'tracks', 25, 100, gammaChange)
-    # cv2.createTrackbar('Black R', 'tracks', 50, 100, gammaChange)
-    # cv2.createTrackbar('Black G', 'tracks', 50, 100, gammaChange)
-    # cv2.createTrackbar('Black B', 'tracks', 50, 100, gammaChange)
+        cv2.createTrackbar('Black R', 'tracks', 50, 100, gammaChange)
+        cv2.createTrackbar('Black G', 'tracks', 50, 100, gammaChange)
+        cv2.createTrackbar('Black B', 'tracks', 50, 100, gammaChange)
 
-    cv2.createTrackbar('White point', 'tracks', 50, 100, gammaChange)
-    # cv2.createTrackbar('White R', 'tracks', 50, 100, gammaChange)
-    # cv2.createTrackbar('White G', 'tracks', 50, 100, gammaChange)
-    # cv2.createTrackbar('White B', 'tracks', 50, 100, gammaChange)
+        cv2.createTrackbar('White R', 'tracks', 50, 100, gammaChange)
+        cv2.createTrackbar('White G', 'tracks', 50, 100, gammaChange)
+        cv2.createTrackbar('White B', 'tracks', 50, 100, gammaChange)
 
-    cv2.createTrackbar('All-gamma', 'tracks', 80, 100, gammaChange)
-    cv2.createTrackbar('Rgamma',    'tracks', 80, 100, gammaChange)
-    cv2.createTrackbar('Ggamma',    'tracks', 80, 100, gammaChange)
-    cv2.createTrackbar('Bgamma',    'tracks', 80, 100, gammaChange)
+        cv2.createTrackbar('All-gamma', 'tracks', 80, 100, gammaChange)
+        cv2.createTrackbar('Rgamma',    'tracks', 80, 100, gammaChange)
+        cv2.createTrackbar('Ggamma',    'tracks', 80, 100, gammaChange)
+        cv2.createTrackbar('Bgamma',    'tracks', 80, 100, gammaChange)
 
-    cv2.createTrackbar('Autoset',     'tracks', 1, 1, nothing)
-    cv2.createTrackbar('Normalize',   'tracks', 0, 1, nothing)
-    cv2.createTrackbar('Disable CCM', 'tracks', 0, 1, nothing)
-    cv2.createTrackbar('Reset',       'tracks', 0, 1, nothing)
+        cv2.createTrackbar('Disable CCM', 'tracks', 0, 1, nothing)
+        cv2.createTrackbar('Reset',       'tracks', 0, 1, nothing)
 
-    cv2.createTrackbar('R-R', 'tracks',  175 + 250, 500, nothing)
-    cv2.createTrackbar('R-G', 'tracks', -100 + 250, 500, nothing)
-    cv2.createTrackbar('R-B', 'tracks',   25 + 250, 500, nothing)
+        cv2.createTrackbar('R-R', 'tracks', 100, 250, nothing)
+        cv2.createTrackbar('R-G/B', 'tracks', 100, 200, nothing)
 
-    cv2.createTrackbar('G-R', 'tracks', - 15 + 250, 500, nothing)
-    cv2.createTrackbar('G-G', 'tracks',  130 + 250, 500, nothing)
-    cv2.createTrackbar('G-B', 'tracks', - 15 + 250, 500, nothing)
+        cv2.createTrackbar('G-G', 'tracks', 100, 250, nothing)
+        cv2.createTrackbar('G-R/B', 'tracks', 100, 200, nothing)
 
-    cv2.createTrackbar('B-R', 'tracks',   20 + 250, 500, nothing)
-    cv2.createTrackbar('B-G', 'tracks', - 95 + 250, 500, nothing)
-    cv2.createTrackbar('B-B', 'tracks',  175 + 250, 500, nothing)
+        cv2.createTrackbar('B-B', 'tracks', 100, 250, nothing)
+        cv2.createTrackbar('B-R/G', 'tracks', 100, 200, nothing)
 
-    src = cropresize2(src_arr[i], fac, crop, y, x)
+    src = resize(src_arr[i], fac)
 
     gammaUpdate = True
     while 1:
-        if 1:
+        sleep(0.05)
+        k = cv2.waitKeyEx(1) & 0xFF
+        if k != 27:
+            gammaUpdate = True
+        if k == 27:
+            break
+        elif k == ord("z"):
+            i -= 1
+            i %= len(src_arr)
+            src = resize(src_arr[i], fac)
+        elif k == ord("x"):
+            i += 1
+            i %= len(src_arr)
+            src = resize(src_arr[i], fac)
+
+        if 1: #Getting positions
+            comp_lo = cv2.getTrackbarPos('Compress lo', 'tracks') / 100
+            # comp_hi = cv2.getTrackbarPos('Compress hi', 'tracks') / 100
+
+            black = [0] * 4
+            black[0] = cv2.getTrackbarPos('Black point', 'tracks') / 1000 * 15 - 0.375
+            black[1] = cv2.getTrackbarPos('Black B', 'tracks') / 1000 * 4 - 0.2
+            black[2] = cv2.getTrackbarPos('Black G', 'tracks') / 1000 * 4 - 0.2
+            black[3] = cv2.getTrackbarPos('Black R', 'tracks') / 1000 * 4 - 0.2
+
+            white = [0] * 4
+            white[0] = cv2.getTrackbarPos('White point', 'tracks') / 1000 * 4 - 0.2
+            white[1] = cv2.getTrackbarPos('White B', 'tracks') / 1000 * 2 - 0.1
+            white[2] = cv2.getTrackbarPos('White G', 'tracks') / 1000 * 2 - 0.1
+            white[3] = cv2.getTrackbarPos('White R', 'tracks') / 1000 * 2 - 0.1
+
+            gammaa = cv2.getTrackbarPos('All-gamma', 'tracks')
+            gammar = cv2.getTrackbarPos('Rgamma', 'tracks')
+            gammag = cv2.getTrackbarPos('Ggamma', 'tracks')
+            gammab = cv2.getTrackbarPos('Bgamma', 'tracks')
+
+            gammaa = 4**((gammaa / 100) * 2 - 1.6)
+            gammar = 3**((gammar / 100) * 2 - 1.6)
+            gammag = 3**((gammag / 100) * 2 - 1.6)
+            gammab = 3**((gammab / 100) * 2 - 1.6)
+
+            clipping = cv2.getTrackbarPos('Clipping', 'tracks')
+            disable = cv2.getTrackbarPos('Disable CCM', 'tracks')
+            reset = cv2.getTrackbarPos('Reset', 'tracks')
+
+            r1 = cv2.getTrackbarPos('R-R', 'tracks') / 100
+            r2 = cv2.getTrackbarPos('R-G/B', 'tracks') / 100 - 1
+
+            g1 = cv2.getTrackbarPos('G-G', 'tracks') / 100
+            g2 = cv2.getTrackbarPos('G-R/B', 'tracks') / 100 - 1
+
+            b1 = cv2.getTrackbarPos('B-B', 'tracks') / 100
+            b2 = cv2.getTrackbarPos('B-R/G', 'tracks') / 100 - 1
+
+        if gammaUpdate:
+            gammaTemp = (src.copy() + black[0]) / (1 + black[0])
+            for _c in range(1,4):
+                gammaTemp[...,_c-1] = (gammaTemp[...,_c-1] + black[_c]) / (1 + black[_c])
+
+            gammaTemp = gammaTemp * (1 + white[0])
+            for _c in range(1,4):
+                gammaTemp[...,_c-1] = gammaTemp[...,_c-1] * (1 + white[_c])
+
+            gammaTemp = gammaBGR(gammaTemp, gammaa, gammab, gammag, gammar)
+            gammaUpdate = False
+
+        if reset:
+            reset = 0
+
+            cv2.setTrackbarPos('R-R', 'tracks', 100)
+            cv2.setTrackbarPos('R-G/B', 'tracks', 250)
+
+            cv2.setTrackbarPos('G-G', 'tracks', 100)
+            cv2.setTrackbarPos('G-R/B', 'tracks', 250)
+
+            cv2.setTrackbarPos('B-B', 'tracks', 100)
+            cv2.setTrackbarPos('B-R/G', 'tracks', 250)
+
+            cv2.setTrackbarPos('Reset', 'tracks', 0)
+
+        if disable:
+            ccm = np.eye(3)
+        else:
+            ccm = np.array([
+                [r1, 0.5 + 0.5 * r2 - 0.5 * r1, 0.5 - 0.5 * r2 - 0.5 * r1],
+                [0.5 + 0.5 * g2 - 0.5 * g1, g1, 0.5 - 0.5 * g2 - 0.5 * g1],
+                [0.5 + 0.5 * b2 - 0.5 * b1, 0.5 - 0.5 * b2 - 0.5 * b1, b1]])
+
+        temp = CCM(gammaTemp, ccm)
+        temp = compress_shadows(temp, 0.55, comp_lo)
+        # temp = compress_highlights(temp, 0.5, comp_hi)
+
+        if clipping:
+            temp[temp >= 1] = 0.001
+            temp[temp <= 0] = 1
+            temp[np.isnan(temp)] = 1
+
+        cv2.imshow("image", temp)
+
+    cv2.destroyAllWindows()
+
+    return ccm, black, white, gammaa, gammab, gammag, gammar, comp_lo
+
+
+def ccmGamma_old(src_arr, fac=100, crop=100, y=0, x=0):
+    def gammaChange(p):
+        gammaUpdate = True
+
+    if src_arr.ndim == 3:
+        src_arr = src_arr[None, ...]
+
+    i = 0
+
+    if 1: #create trackbars
+        cv2.namedWindow('image')
+        cv2.namedWindow('tracks', cv2.WINDOW_NORMAL)
+
+        cv2.createTrackbar('Clipping', 'tracks', 0, 1, nothing)
+
+        cv2.createTrackbar('Compress lo', 'tracks', 0, 100, gammaChange)
+        # cv2.createTrackbar('Compress hi', 'tracks', 0, 100, gammaChange)
+
+        cv2.createTrackbar('Black point', 'tracks', 25, 100, gammaChange)
+        # cv2.createTrackbar('Black R', 'tracks', 50, 100, gammaChange)
+        # cv2.createTrackbar('Black G', 'tracks', 50, 100, gammaChange)
+        # cv2.createTrackbar('Black B', 'tracks', 50, 100, gammaChange)
+
+        cv2.createTrackbar('White point', 'tracks', 50, 100, gammaChange)
+        # cv2.createTrackbar('White R', 'tracks', 50, 100, gammaChange)
+        # cv2.createTrackbar('White G', 'tracks', 50, 100, gammaChange)
+        # cv2.createTrackbar('White B', 'tracks', 50, 100, gammaChange)
+
+        cv2.createTrackbar('All-gamma', 'tracks', 80, 100, gammaChange)
+        cv2.createTrackbar('Rgamma',    'tracks', 80, 100, gammaChange)
+        cv2.createTrackbar('Ggamma',    'tracks', 80, 100, gammaChange)
+        cv2.createTrackbar('Bgamma',    'tracks', 80, 100, gammaChange)
+
+        cv2.createTrackbar('Autoset',     'tracks', 1, 1, nothing)
+        cv2.createTrackbar('Normalize',   'tracks', 0, 1, nothing)
+        cv2.createTrackbar('Disable CCM', 'tracks', 0, 1, nothing)
+        cv2.createTrackbar('Reset',       'tracks', 0, 1, nothing)
+
+        cv2.createTrackbar('R-R', 'tracks',  175 + 250, 500, nothing)
+        cv2.createTrackbar('R-G', 'tracks', -100 + 250, 500, nothing)
+        cv2.createTrackbar('R-B', 'tracks',   25 + 250, 500, nothing)
+
+        cv2.createTrackbar('G-R', 'tracks', - 15 + 250, 500, nothing)
+        cv2.createTrackbar('G-G', 'tracks',  130 + 250, 500, nothing)
+        cv2.createTrackbar('G-B', 'tracks', - 15 + 250, 500, nothing)
+
+        cv2.createTrackbar('B-R', 'tracks',   20 + 250, 500, nothing)
+        cv2.createTrackbar('B-G', 'tracks', - 95 + 250, 500, nothing)
+        cv2.createTrackbar('B-B', 'tracks',  175 + 250, 500, nothing)
+
+    src = cropresize(src_arr[i], fac, crop, y, x)
+
+    gammaUpdate = True
+    while 1:
+        if 1: #key bindings
             sleep(0.1)
             k = cv2.waitKeyEx(1) & 0xFF
             if k != 27:
@@ -165,37 +351,37 @@ def ccmGamma(src_arr, fac=100, crop=100, y=0, x=0):
                     i = len(src_arr) - 1
                 else:
                     i -= 1
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("x"):
                 if i == len(src_arr) - 1:
                     i = 0
                 else:
                     i += 1
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("r"):
                 fac = np.clip(max(fac * 1.1, fac + 1), 1, 100)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("f"):
                 fac = np.clip(min(fac * 0.9, fac - 1), 1, 100)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("q"):
                 crop = np.clip(crop + 5, 1, 100)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("e"):
                 crop = np.clip(crop - 5, 1, 100)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("w"):
                 y = np.clip(y - 0.05, 0, 1)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("s"):
                 y = np.clip(y + 0.05, 0, 1)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("a"):
                 x = np.clip(x - 0.05, 0, 1)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
             elif k == ord("d"):
                 x = np.clip(x + 0.05, 0, 1)
-                src = cropresize2(src_arr[i], fac, crop, y, x)
+                src = cropresize(src_arr[i], fac, crop, y, x)
 
         comp_lo = cv2.getTrackbarPos('Compress lo', 'tracks') / 100
         # comp_hi = cv2.getTrackbarPos('Compress hi', 'tracks') / 100
@@ -340,7 +526,6 @@ def ccmGammaIR(src, fac=20, crop=100, y=0, x=0, apply=True):
     src = cv2.merge((g, r, b))
 
     def gammaChange(p):
-        global gammaUpdate
         gammaUpdate = True
 
     cv2.namedWindow('image')
@@ -365,9 +550,8 @@ def ccmGammaIR(src, fac=20, crop=100, y=0, x=0, apply=True):
     cv2.createTrackbar('Reset', 'tracks', 0, 1, nothing)
 
     gammaUpdate = True
-    src2 = cropresize2(src, fac, crop, y, x)
+    src2 = cropresize(src, fac, crop, y, x)
     while 1:
-        from time import sleep
         sleep(0.1)
 
         k = cv2.waitKeyEx(1) & 0xFF
@@ -377,10 +561,10 @@ def ccmGammaIR(src, fac=20, crop=100, y=0, x=0, apply=True):
             break
         elif k == ord("r"):
             fac = np.clip(max(fac * 1.1, fac + 1), 1, 100)
-            src2 = cropresize2(src, fac, crop, y, x)
+            src2 = cropresize(src, fac, crop, y, x)
         elif k == ord("f"):
             fac = np.clip(min(fac * 0.9, fac - 1), 1, 100)
-            src2 = cropresize2(src, fac, crop, y, x)
+            src2 = cropresize(src, fac, crop, y, x)
 
         gammaa = cv2.getTrackbarPos('Gamma', 'tracks')
 
@@ -448,8 +632,7 @@ def ccmGammaIR(src, fac=20, crop=100, y=0, x=0, apply=True):
         src = gamma(src, gammaa)
         src2 = CCM(src, ccm)
         return src2
-    else:
-        return ccm, gammaa
+    return ccm, gammaa
 
 
 def mask_edge(src):
@@ -475,14 +658,14 @@ def mask_edge(src):
         diffnorm.astype(np.int32) - diffblurnorm.astype(np.int32) * 1.3,
         0, 65535
     ).astype(np.uint16)
-    ret, diff4 = cv2.threshold(diff3, 5000, 255, cv2.THRESH_BINARY)
+    __, diff4 = cv2.threshold(diff3, 5000, 255, cv2.THRESH_BINARY)
 
     return (diff4).astype(np.uint8)
 
 
 def mask_thres(src, thres):
     c = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
-    ret, c = cv2.threshold(c, thres, 255, cv2.THRESH_BINARY)
+    __, c = cv2.threshold(c, thres, 255, cv2.THRESH_BINARY)
     return c.astype(np.uint8)
 
 
@@ -518,19 +701,20 @@ def add(arr1, arr2):
     return 255 * arrout
 
 
-def norm(src, thLow=0.1, thHigh=99.9, dtype=float):
+def norm(src, th_low=0.1, th_high=99.9, dtype=float):
+    src_out = src.copy().astype(float)
     for j in range(3):
-        src[..., j] = np.interp(src[..., j],
-            (np.percentile(src[..., j], thLow),
-             np.percentile(src[..., j], thHigh)),
+        src_out[..., j] = np.interp(src_out[..., j],
+            (np.percentile(src[..., j], th_low),
+             np.percentile(src[..., j], th_high)),
             (0, 1)
         )
     if dtype == np.uint8:
-        src *= 255
+        src_out *= 255
     elif dtype == np.uint16:
-        src *= 65535
+        src_out *= 65535
 
-    return src.astype(dtype)
+    return src_out.astype(dtype)
 
 
 def float2uint(src, out=16):
@@ -539,9 +723,9 @@ def float2uint(src, out=16):
     if out == 16:
         src *= 65535
         return src.astype(np.uint16)
-    else:
-        src *= 255
-        return src.astype(np.uint8)
+
+    src *= 255
+    return src.astype(np.uint8)
 
 
 def r2b(src):

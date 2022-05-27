@@ -1,5 +1,23 @@
 
-###### © Miguel Pardo 2022
+###### FilmProcesser v0.02
+## Novedades en la versión 0.02:
+- Soporte para los siguientes formatos:
+    - .cr2
+    - .nef
+    - .arw
+    - .cr3
+    - .crw
+    - .rw2
+    - .raf
+    - .dng
+    - .crw
+- Configuración manual para ciertos parámetros del programa con `setup.exe`
+- Añadida la opción de recorte manual
+- Mezclador de canales actualizado para hacerlo más intuitivo
+- Añadidos deslizadores de nivel negro/blanco RGB
+- Otros ajustes y arreglos menores
+
+--------
 # Acerca de
 Este programa pretende proporcionar un positivado base para todo un rollo a color a la vez (para asegurar consistencia dentro de cada rollo), con ajustes relativamente sencillos para cosas difíciles de lograr en programas como Lightroom.
 El programa no pretende ser una solución para generar imágenes finales, por lo que se recomienda finalizar la edicición de las imágenes en Lr o Photoshop, los cuales ahora funcionarían de manera normal al ser una imágen positiva y no negativa. Tampoco pretende proporcionar imágenes fieles al proceso tradicional ni mantener características particulares de ciertos rollos, si el usuario así lo desea.
@@ -17,18 +35,17 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - Re-colorización rápida para tandas ya procesadas
 
 ## Limitaciones conocidas:
-- El programa solo ha sido probado con una Canon 6D, y actualmente solo soporta archivos .CR2
 - La interfaz podría ser más bonita
 - El programa puede ser intensivo en recursos. Se recomienda tener al menos 16GB de RAM
 - Solo soporta Windows
 
 ## Como usar FilmProcesser:
 ### Prerequisitos y suposiciones:
-- Usas una cámara Canon para digitalizar rollos
 - La exposición a lo largo de todo el rollo se mantiene constante, y sin recorte de blancos
 - Los portanegativos usados se mantienen en la misma posición, y son muy cercanos a un negro puro en la imagen
 
 ### Uso básico:
+- Ejecutar `setup.exe` una vez e ingresar los valores deseados
 - Juntar todas las fotos de un mismo rollo en una sola carpeta
 - Ingresar o arrastrar la carpeta que contiene las fotos de los negativos
 - Confirmar los diálogos que puedan aparecer
@@ -43,7 +60,7 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - Sacar una foto al portanegativo, pero sin un negativo presente
 - No es necesario que la foto tenga la misma exposición, pero se recomienda que tenga la misma apertura
 - La foto no debe recortarse en los blancos
-- Renombrar la foto como **"vig.cr2"**
+- Renombrar la foto como **"vig.<extension>"**, 
 
 ### Controles en el visualizador:
 - Z para ir a la imagen anterior
@@ -59,26 +76,28 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
      
 - Clipping:
 	Activar este slider (valor 1) para mostrar áreas donde ocurra recorte de negros o blancos
-- Compress shadows:
-	Ajustar para levantar y comprimir valores negros. Útil para imágenes oscuras
 - Black Point:
 	Ajuste del nivel mínimo para el recorte de negros
 - White Point:
 	Ajuste del nivel mínimo para recorte de blancos
+- Compress shadows:
+	Ajustar para levantar y comprimir valores negros. Útil para imágenes oscuras
+- Black R/G/B:
+	Ajuste del nivel mínimo para cada canal. Remueve dominantes de color en las sombras.
+- White R/G/B:
+	Ajuste del nivel de blanco para recorte de blancos. Remueve dominantes de color en las altas luces. Cuando `Clipping` está activado, las zonas más brillantes (como el sol, suciedades o deberían verse negras)
 - All-gamma:
 	Gamma global de la imagen. El valor específico está definido por $$4^{gamma / 50 - 1.6}$$
 - R/G/B gamma:
-	Gamma por canal de la imagen. El valor específico está definido por $$3^{gamma / 50 - 1.6}$$
-- Autoset:
-	Si está activado, el mezclador se ajustará automáticamente para mantenerse en niveles adecuados
-- Normalize:
-	Si se activa, reajustará los valores por canal del mezclador para evitar recortar luces
+	Gamma por canal de la imagen para remover dominantes de color en los medios. El valor específico está definido por $$3^{gamma / 50 - 1.6}$$
 - Disable CCM:
 	Si se activa, se puede ver una comparación de mezclador por defecto con el actual
 - Reset:
 	Si se activa, se devuelve al mezclador por defecto
-- X-Y:
-	Mezclador. Agrega un poco del canal Y al canal de salida X. Mismo funcionamiento que en Photoshop o programas similares. Por limitaciones de la interfaz, el punto medio (0%) es 250, por lo que 100% queda en 350.
+- X-X:
+	Mezclador. Intensifica el color R/G/B y su contraparte C/M/Y.
+- X-Y/Z
+	Mezclador. Desplaza el color R/G/B hacia Y o Z según corresponda
 	
 ## Cómo construir con Python:
 ### Librerías:
@@ -93,7 +112,7 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - PyInstaller
 -----
 1. Descargar e instalar todas las librerías
-2. Clonar este repositorio, o descargar `FilmProcesser.py` y `funcs.py` individualmente
+2. Clonar este repositorio, o descargar `FilmProcesser.py`, `funcs.py` y `setup.py` individualmente
 3. Probar si todo funciona con python y el script
 4. Buscar la ruta de instalación de OpenCV con 
     `import cv2`
