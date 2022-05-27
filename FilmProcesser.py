@@ -1,5 +1,5 @@
 # %%defs
-from os import chdir, listdir, path
+from os import chdir, listdir, path, getcwd
 from time import sleep
 from gc import collect
 from multiprocessing import Pool, freeze_support
@@ -14,9 +14,6 @@ import funcs as f
 # TODO: import exiftool
 from copy import deepcopy as copy # for debugging
 from funcs import show # for debugging
-
-
-path_current_directory = path.dirname(__file__)
 
 formats = [
     "cr2",
@@ -144,9 +141,12 @@ def unpack_params():
 
 # %% Processer
 
-def img_process(name):
+def img_process(tup):
+    # tup[0] is FilmProcesser path
+    # tup[1] is photo to be processed path
     try:
-        chdir(path_current_directory)
+        # TODO: put this in init_pool
+        chdir(tup[0])
         config = ConfigParser()
         config.read("setup.ini")
         _interp = config["IMAGE PROCESSING"]["Interpolation method"]
@@ -159,6 +159,7 @@ def img_process(name):
         bit_depth = config.getint("IMAGE OUTPUT", "Bit depth")
         bit_depth = (2**bit_depth-1)<<(16-bit_depth)
 
+        name = tup[1]
         chdir(path.dirname(name))
         (need_vig, perc_min_img, perc_max_img, black, white,
         gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = unpack_params()
@@ -215,6 +216,7 @@ def read_proxy(name):
 
 def main():
 # if __name__ == "__main__":
+    original_path = getcwd()
     freeze_support()
     print("FilmProcesser v0.02")
     print("-------------------")
@@ -454,11 +456,12 @@ def main():
     print("Esto puede tomar unos minutos...")
     print("CTRL+C para cancelar (demora unos segundos)")
     print("-----------")
-    chdir(filename)
 
     imglist2 = [path.join(filename, "original", name)
                 for name in imglist if "vig" not in name.lower()]
+    imglist2 = [(original_path, name) for name in imglist2]
 
+    chdir(original_path)
     with Pool(processes=max_processes, initializer=init_pool) as pool:
         with tqdm.trange(len(imglist2), unit="photo") as progress_bar:
             res = pool.imap_unordered(img_process, imglist2, chunksize=1)
@@ -468,6 +471,7 @@ def main():
     # for _img in imglist2:
     #     img_process(_img)
 
+    chdir(filename)
     del_files = input("Desea eliminar los archivo proxy? y/[n]: ")
     while del_files not in ("y", "n", ""):
         del_files = input("y/n: ").lower()
