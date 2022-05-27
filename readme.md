@@ -1,5 +1,4 @@
-
-###### FilmProcesser v0.02
+# FilmProcesser v0.02
 ## Novedades en la versión 0.02:
 - Soporte para los siguientes formatos:
     - .cr2
@@ -60,7 +59,7 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - Sacar una foto al portanegativo, pero sin un negativo presente
 - No es necesario que la foto tenga la misma exposición, pero se recomienda que tenga la misma apertura
 - La foto no debe recortarse en los blancos
-- Renombrar la foto como **"vig.<extension>"**, 
+- Renombrar la foto como **"vig"** 
 
 ### Controles en el visualizador:
 - Z para ir a la imagen anterior
