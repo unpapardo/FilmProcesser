@@ -1,5 +1,5 @@
 # %%defs
-from os import chdir, listdir
+from os import chdir, listdir, path
 from time import sleep
 from gc import collect
 from multiprocessing import Pool, freeze_support
@@ -14,6 +14,9 @@ import funcs as f
 # TODO: import exiftool
 from copy import deepcopy as copy # for debugging
 from funcs import show # for debugging
+
+
+path_current_directory = path.dirname(__file__)
 
 formats = [
     "cr2",
@@ -113,12 +116,8 @@ def pack_params(need_vig, perc_min_img, perc_max_img, black, white,
 
 
 # TODO: Update to configparser would be nice
-def unpack_params(orig=False):
-    if orig:
-        path = "original/params.txt"
-    else:
-        path = "params.txt"
-    with open(path, "r") as file:
+def unpack_params():
+    with open("params.txt", "r") as file:
         params = file.readlines()
     need_vig = False
     if params[1] == "True\n":
@@ -147,9 +146,10 @@ def unpack_params(orig=False):
 
 def img_process(name):
     try:
+        chdir(path_current_directory)
         config = ConfigParser()
         config.read("setup.ini")
-        _interp = config["IMAGE PROCESSING"]["Interpolation"]
+        _interp = config["IMAGE PROCESSING"]["Interpolation method"]
         if _interp == "LINEAR":
             args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.LINEAR
         elif _interp == "AHD":
@@ -159,10 +159,11 @@ def img_process(name):
         bit_depth = config.getint("IMAGE OUTPUT", "Bit depth")
         bit_depth = (2**bit_depth-1)<<(16-bit_depth)
 
+        chdir(path.dirname(name))
         (need_vig, perc_min_img, perc_max_img, black, white,
-        gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = unpack_params(orig=True)
+        gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = unpack_params()
 
-        with rp.imread("original/" + name) as raw:
+        with rp.imread(name) as raw:
             imgp = raw.postprocess(**args_full)
             black_level = raw.black_level_per_channel[0]
         imgp = f.r2b(imgp) / 65535
@@ -171,7 +172,7 @@ def img_process(name):
         collect()
 
         if need_vig:
-            vigp = np.load("original/vig.npy")
+            vigp = np.load("vig.npy")
             imgp = np.divide(imgp, vigp)
             del vigp
         collect()
@@ -195,7 +196,8 @@ def img_process(name):
 
         imgp = np.interp(imgp, (0, 1), (0, 65535)).astype(np.uint16)
         imgp = imgp & bit_depth
-        cv2.imwrite(name[:-4] + ".png", imgp)
+        cv2.imwrite(path.dirname(name)[:-8] +
+                    path.basename(name)[:-3].upper() + "png", imgp)
     except KeyboardInterrupt:
         sys.exit()
 
@@ -228,7 +230,7 @@ def main():
         need_crop = config.getboolean("IMAGE PROCESSING", "Cropping")
         need_roi = config.getboolean("IMAGE PROCESSING", "Always set manual crop")
         need_vig = config.getboolean("IMAGE PROCESSING", "Luminosity correction")
-        _interp = config["IMAGE PROCESSING"]["Interpolation"]
+        _interp = config["IMAGE PROCESSING"]["Interpolation method"]
         if _interp == "LINEAR":
             args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.LINEAR
         elif _interp == "AHD":
@@ -454,7 +456,8 @@ def main():
     print("-----------")
     chdir(filename)
 
-    imglist2 = [name for name in imglist if "vig" not in name.lower()]
+    imglist2 = [path.join(filename, "original", name)
+                for name in imglist if "vig" not in name.lower()]
 
     with Pool(processes=max_processes, initializer=init_pool) as pool:
         with tqdm.trange(len(imglist2), unit="photo") as progress_bar:
