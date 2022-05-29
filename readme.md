@@ -1,20 +1,8 @@
 # FilmProcesser v0.02
-## Novedades en la versión 0.02:
-- Soporte para los siguientes formatos:
-    - .cr2
-    - .nef
-    - .arw
-    - .cr3
-    - .crw
-    - .rw2
-    - .raf
-    - .dng
-    - .crw
-- Configuración manual para ciertos parámetros del programa con `setup.exe`
-- Añadida la opción de recorte manual
-- Mezclador de canales actualizado para hacerlo más intuitivo
-- Añadidos deslizadores de nivel negro/blanco RGB
-- Otros ajustes y arreglos menores
+## Novedades en la versión 0.03:
+- Ahora se preservan la mayor parte de los metadatos EXIF
+- Mejoras de velocidad
+- Otros arreglos menores
 
 --------
 # Acerca de
@@ -32,6 +20,16 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - Mezclador de canales RGB
 - Corrección de luminosidad base (si existe)
 - Re-colorización rápida para tandas ya procesadas
+- Soporte para los siguientes formatos:
+    - .cr2
+    - .nef
+    - .arw
+    - .cr3
+    - .crw
+    - .rw2
+    - .raf
+    - .dng
+    - .crw
 
 ## Limitaciones conocidas:
 - La interfaz podría ser más bonita
@@ -109,6 +107,8 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - TQDM
 - RawPy
 - PyInstaller
+- psutil
+- pyexiftool
 -----
 1. Descargar e instalar todas las librerías
 2. Clonar este repositorio, o descargar `FilmProcesser.py`, `funcs.py` y `setup.py` individualmente
@@ -117,4 +117,4 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
     `import cv2`
     `print(cv2.__file__)`
 6. Abrir Anaconda prompt
-7. Ejecutar el comando `pyinstaller FilmProcesser.py -paths="<ruta de OpenCV>" --icon icon.png -F`
+7. Ejecutar el comando `build.bat`, reemplazando las rutas para cada caso particular
