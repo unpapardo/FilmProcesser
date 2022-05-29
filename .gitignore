@@ -1,0 +1,8 @@
+*.lnk
+*.spec
+.pylint.d
+.spyproject
+__pycache__
+build
+dist
+*bat

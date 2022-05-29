@@ -1,7 +1,7 @@
 # %%defs
 from os import chdir, listdir, path, getcwd
+import os
 from time import sleep
-from gc import collect
 from multiprocessing import Pool, freeze_support
 from configparser import ConfigParser
 import sys
@@ -11,20 +11,19 @@ import rawpy as rp
 import cv2
 import tqdm
 import funcs as f
-# TODO: import exiftool
+import exiftool
 from copy import deepcopy as copy # for debugging
 from funcs import show # for debugging
 
 formats = [
+    "crw",
     "cr2",
+    "cr3",
     "nef",
     "arw",
-    "cr3",
-    "crw",
     "rw2",
     "raf",
     "dng",
-    "crw",
     ]
 
 args_proxy = dict(
@@ -62,10 +61,6 @@ args_full = dict(
     # user_flip=0
     # bright=4
     )
-
-# https://stackoverflow.com/questions/68688044/cant-terminate-multiprocessing-program-with-ctrl-c
-def init_pool():
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 # TODO: Update to configparser would be nice
@@ -113,8 +108,11 @@ def pack_params(need_vig, perc_min_img, perc_max_img, black, white,
 
 
 # TODO: Update to configparser would be nice
-def unpack_params():
-    with open("params.txt", "r") as file:
+def unpack_params(orig = False):
+    unpack_path = "params.txt"
+    if not orig:
+        unpack_path = "original/" + unpack_path
+    with open(unpack_path, "r") as file:
         params = file.readlines()
     need_vig = False
     if params[1] == "True\n":
@@ -139,66 +137,85 @@ def unpack_params():
     return (need_vig, perc_min_img, perc_max_img, black, white,
             gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo)
 
+
+# https://stackoverflow.com/questions/68688044/cant-terminate-multiprocessing-program-with-ctrl-c
+def init_pool_read():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
 # %% Processer
 
-def img_process(tup):
-    # tup[0] is FilmProcesser path
-    # tup[1] is photo to be processed path
+write_bit_depth = 65535
+process_params = None
+process_vig = None
+et = None
+def init_pool_process(og_path, workpath):
+    global write_bit_depth
+    global process_params
+    global process_vig
+    global et
+
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    chdir(og_path)
+    config = ConfigParser()
+    config.read("setup.ini")
+    _interp = config["IMAGE PROCESSING"]["Interpolation method"]
+    if _interp == "LINEAR":
+        args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.LINEAR
+    elif _interp == "AHD":
+        args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.AHD
+    elif _interp == "DHT":
+        args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.DHT
+    write_bit_depth = config.getint("IMAGE OUTPUT", "Bit depth")
+    write_bit_depth = (2**write_bit_depth-1)<<(16-write_bit_depth)
+    chdir(workpath)
+
+    process_params = unpack_params()
+    if process_params[0] == True: #aka need_vig
+        process_vig = np.load("original/vig.npy")
+
+    et = exiftool.ExifTool(path.join(og_path, "exiftool.exe"))
+    et.run()
+
+
+def img_process(name):
     try:
-        # TODO: put this in init_pool
-        chdir(tup[0])
-        config = ConfigParser()
-        config.read("setup.ini")
-        _interp = config["IMAGE PROCESSING"]["Interpolation method"]
-        if _interp == "LINEAR":
-            args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.LINEAR
-        elif _interp == "AHD":
-            args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.AHD
-        elif _interp == "DHT":
-            args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.DHT
-        bit_depth = config.getint("IMAGE OUTPUT", "Bit depth")
-        bit_depth = (2**bit_depth-1)<<(16-bit_depth)
-
-        name = tup[1]
-        chdir(path.dirname(name))
         (need_vig, perc_min_img, perc_max_img, black, white,
-        gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = unpack_params()
+        gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = process_params
 
-        with rp.imread(name) as raw:
+        with rp.imread("original/" + name) as raw:
             imgp = raw.postprocess(**args_full)
             black_level = raw.black_level_per_channel[0]
+
         imgp = f.r2b(imgp) / 65535
         imgp = imgp - black_level / 65535
         imgp = imgp[slice(*crop[:2]),slice(*crop[2:])]
-        collect()
 
-        if need_vig:
-            vigp = np.load("vig.npy")
-            imgp = np.divide(imgp, vigp)
-            del vigp
-        collect()
+        if process_vig is not None:
+            imgp = np.divide(imgp, process_vig)
 
         imgp = 1 - imgp
-        for j in range(3):
-            imgp[...,j] = imgp[...,j] - perc_min_img[j]
-            imgp[...,j] = imgp[...,j] / (perc_max_img[j] - perc_min_img[j])
+        imgp = (imgp - perc_min_img) / (perc_max_img - perc_min_img)
 
         imgp = (imgp + black[0]) / (1 + black[0])
-        for _c in range(1,4):
-            imgp[...,_c-1] = (imgp[...,_c-1] + black[_c]) / (1 + black[_c])
+        imgp = (imgp + black[1:]) / (1 + black[1:])
 
-        imgp = imgp * (1 + white[0])
-        for _c in range(1,4):
-            imgp[...,_c-1] = imgp[...,_c-1] * (1 + white[_c])
+        _white = (1 + white[0]) * (1 + white[1:])
+        imgp = imgp * _white
 
-        imgp = f.gammaBGR(imgp, gamma_all, gamma_b, gamma_g, gamma_r)
+        imgp = f.gamma(imgp, gamma_all, gamma_b, gamma_g, gamma_r)
         imgp = f.CCM(imgp, ccm)
         imgp = f.compress_shadows(imgp, 0.55, comp_lo)
 
-        imgp = np.interp(imgp, (0, 1), (0, 65535)).astype(np.uint16)
-        imgp = imgp & bit_depth
-        cv2.imwrite(path.dirname(name)[:-8] +
-                    path.basename(name)[:-3].upper() + "png", imgp)
+        imgp = (np.clip(imgp, 0, 1) * 65535).astype(np.uint16)
+        imgp = imgp & write_bit_depth
+
+        cv2.imwrite(name[:-3].upper() + "tiff", imgp,
+                    (cv2.IMWRITE_TIFF_COMPRESSION, 32946)) #to use deflate compression
+
+        et.execute(f'-tagsfromfile=original/{name}',
+                    "-overwrite_original_in_place", name[:-3]+"tiff")
     except KeyboardInterrupt:
         sys.exit()
 
@@ -218,7 +235,7 @@ def main():
 # if __name__ == "__main__":
     original_path = getcwd()
     freeze_support()
-    print("FilmProcesser v0.02")
+    print("FilmProcesser v0.03")
     print("-------------------")
     print()
 
@@ -246,11 +263,12 @@ def main():
         sleep(5)
         sys.exit()
 
-    # filename = r"C:/new"
     while 1:
         filename = input("Ruta de carpeta: ")
         print()
         try:
+            if "original" in filename:
+                filename = path.dirname(filename)
             chdir(filename)
             files_found = False
             if "original" in listdir():
@@ -266,31 +284,28 @@ def main():
             print("Carpeta no válida")
 
     chdir(filename)
-    flist = listdir()
-    if "original" not in flist:
-        f.cmd("mkdir original")
-    f.cmd(f"for %a in (*.{extension}) do move %a original/%a")
-    chdir(filename + "/original")
+    if "original" not in listdir():
+        os.mkdir("original")
+        flist = [file for file in listdir() if extension in file.lower()]
+        for _file in flist:
+            os.rename(_file, f"original/{_file}")
+
+    chdir("original")
     flist = [file.lower() for file in listdir()]
 
     if "params.txt" in flist:
         (need_vig, perc_min_img, perc_max_img, black, white,
-         gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = unpack_params()
+         gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = unpack_params(orig = True)
         print("Se ha encontrado archivo de configuración")
-        key = input("Recolorizar? [y]/n: ").lower()
-        # key = "n"
-        if key in ("", "y"):
+        key = input("Recolorizar? [Y]/n: ").lower()
+        while key.lower() not in ("y", "n", ""):
+            key = input("[Y]/n: ").lower()
+        if key in ("y", ""):
             need_proxy = 2
-        elif key == "n":
+        if key == "n":
             need_proxy = 0
-        else:
-            while key.lower() not in ("y", "n"):
-                key = input("y/n: ").lower()
-                if key == "y":
-                    need_proxy = 2
-                    break
-                if key == "n":
-                    need_proxy = 0
+    elif "proxy.npy" in flist:
+        need_proxy = 2
     else:
         need_proxy = 1
 
@@ -302,25 +317,24 @@ def main():
             need_vig = False
             print(f"ATENCION: No se encontró archivo vig.{extension}")
             print("Desea continuar?")
-            while 1:
-                key = input("[y]/n: ").lower()
-                if key in ("", "y"):
-                    break
-                if key == "n":
-                    sys.exit()
+            key = input("[Y]/n: ").lower()
+            while key.lower() not in ("y", "n", ""):
+                key = input("[Y]/n: ").lower()
+            if key == "n":
+                sys.exit()
 
     for file in flist:
         if file[-3:] == extension and "vig" not in file.lower():
             imglist.append(file)
+
     if need_proxy == 2:
-        if "proxy.npy" not in listdir():
+        if "proxy.npy" not in flist:
             need_proxy = 1
-    chdir(filename + "/original")
 
     if need_proxy == 1:
         print("Leyendo RAWs...")
         # maybe specify max amount of processes
-        with Pool(processes=None, initializer=init_pool) as exe:
+        with Pool(processes=None, initializer=init_pool_read) as exe:
             img = []
             for _res in exe.imap(read_proxy, imglist):
                 img.append(_res)
@@ -328,9 +342,9 @@ def main():
         with rp.imread(imglist[0]) as raw:
             black_level = raw.black_level_per_channel[0]
 
-        # TODO: In the future for metadata related stuff
-        # with exiftool.ExifTool(r"D:\MPardo HDD\Downloads\exiftool-12.41\exiftool.exe") as et:
-        #     meta = et.execute_json(*imglist)
+        # TODO: implement exposure scaling
+        # with exiftool.ExifTool(path.join(original_path, "exiftool.exe")) as et:
+        #     meta = et.get_metadata_batch(imglist)
 
         # img0=copy(img) #for debugging purposes
 
@@ -362,7 +376,8 @@ def main():
                         crop.append([margin, -margin])
             crop = list(np.array(crop).flatten())
 
-            crop_img_prev = img[0].copy()[slice(*crop[:2]),slice(*crop[2:])]
+
+            crop_img_prev = img[need_vig].copy()[slice(*crop[:2]),slice(*crop[2:])]
             crop_img_prev = 1-f.norm(crop_img_prev)
             crop_img_prev = f.resize(crop_img_prev, reduce_factor)
 
@@ -431,12 +446,10 @@ def main():
             perc_max_img[j] = np.percentile(img[..., j], 99.8)*1.0025
 
         print("Normalizando...")
-        for j in range(3):
-            img[...,j] = img[...,j] - perc_min_img[j]
-            img[...,j] = img[...,j] / (perc_max_img[j] - perc_min_img[j])
+        img = (img - perc_min_img) / (perc_max_img - perc_min_img)
 
         print("Guardando proxies...")
-        np.save("proxy.npy",img.astype(np.float32))
+        np.save("proxy.npy", img.astype(np.float32))
 
     if need_proxy == 2:
         print("Leyendo proxies...")
@@ -457,22 +470,22 @@ def main():
     print("CTRL+C para cancelar (demora unos segundos)")
     print("-----------")
 
-    imglist2 = [path.join(filename, "original", name)
-                for name in imglist if "vig" not in name.lower()]
-    imglist2 = [(original_path, name) for name in imglist2]
+    imglist2 = [name for name in imglist if "vig" not in name.lower()]
 
-    chdir(original_path)
-    with Pool(processes=max_processes, initializer=init_pool) as pool:
+    chdir(filename)
+    with Pool(processes=max_processes, initializer=init_pool_process,
+              initargs=[original_path, filename]) as pool:
         with tqdm.trange(len(imglist2), unit="photo") as progress_bar:
             res = pool.imap_unordered(img_process, imglist2, chunksize=1)
             for __ in res:
                 progress_bar.update(1)
+    f.kill_process("exiftool.exe")
 
     # for _img in imglist2:
     #     img_process(_img)
 
     chdir(filename)
-    del_files = input("Desea eliminar los archivo proxy? y/[n]: ")
+    del_files = input("Desea eliminar los archivo proxy? y/[N]: ")
     while del_files not in ("y", "n", ""):
         del_files = input("y/n: ").lower()
     if del_files == "y":
