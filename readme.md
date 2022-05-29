@@ -1,4 +1,4 @@
-# FilmProcesser v0.02
+# FilmProcesser v0.03
 ## Novedades en la versión 0.03:
 - Ahora se preservan la mayor parte de los metadatos EXIF
 - Mejoras de velocidad
