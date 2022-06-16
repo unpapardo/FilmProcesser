@@ -686,11 +686,13 @@ def mask_thres(src, thres):
 
 
 def k(ksize):
+    ksize = max(ksize, 1)
     ker = np.ones((ksize, ksize), np.uint8)
     return ker
 
 
 def k2(ksize):
+    ksize = max(ksize, 1)
     return (int(ksize), int(ksize))
 
 

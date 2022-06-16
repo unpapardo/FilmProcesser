@@ -515,6 +515,7 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
+        f.kill_process("exiftool.exe")
         print()
         print("--------------")
         print("Interrupción detectada")
