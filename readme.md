@@ -1,7 +1,8 @@
-# FilmProcesser v0.03
-## Novedades en la versión 0.03:
-- Ahora se preservan la mayor parte de los metadatos EXIF
-- Mejoras de velocidad
+# FilmProcesser v0.04
+## Novedades en la versión 0.04:
+- La funcion de recorte se ha mejorado considerablemente
+- El colorizador ahora calcula un gamma automáticamente e incluye un histograma
+- Se agregó una función de corrección automática de exposición
 - Otros arreglos menores
 
 --------
@@ -15,7 +16,9 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 ## Características:
 - Consistencia para todas las fotos de un mismo rollo
 - Recorte automático de negativos
+- Compensación automática de exposición
 - Cálculo automático de niveles blanco y negro
+- Cálculo automático de gamma para cada canal RGB
 - Ajuste manual de gamma para cada canal RGB
 - Mezclador de canales RGB
 - Corrección de luminosidad base (si existe)
@@ -38,8 +41,9 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 
 ## Como usar FilmProcesser:
 ### Prerequisitos y suposiciones:
-- La exposición a lo largo de todo el rollo se mantiene constante, y sin recorte de blancos
-- Los portanegativos usados se mantienen en la misma posición, y son muy cercanos a un negro puro en la imagen
+- La exposición a lo largo de todo el rollo se mantiene constante o constante o se varía desde la cámara, **no desde la fuente de luz**, y sin recorte de blancos
+	- Al variar la exposición se recomienda cambiar la velocidad de exposición o el ISO. Variar la apertura podría afectar otras variables no controladas
+- Los negativos usados se mantienen en la misma posición relativa en todo el proceso
 
 ### Uso básico:
 - Ejecutar `setup.exe` una vez e ingresar los valores deseados
@@ -47,9 +51,9 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 - Ingresar o arrastrar la carpeta que contiene las fotos de los negativos
 - Confirmar los diálogos que puedan aparecer
 - Ingresar valores de colorización
-	- Se recomienda partir con All-gamma
+	- Se recomienda partir con puntos de blanco/negro si es necesario
+	- Después All-gamma
 	- Luego el gamma correspondiente a cada canal
-	- Después puntos de blanco/negro si es necesario
 	- Finalmente el mezclador de canales
 - Esperar a que el programa exporte las fotos
 
@@ -62,12 +66,12 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 ### Controles en el visualizador:
 - Z para ir a la imagen anterior
 - X para ir a la imagen siguiente
-- Esc para finalizar (**TIENE QUE FINALIZARSE CON ESC**, de lo contrario habrán errores)
+- Esc o Enter para finalizar (**TIENE QUE FINALIZARSE CON ESC o Enter**, de lo contrario habrán errores)
 
 ## Sobre el tratamiento de los archivos:
-- El programa mueve todos los CR2 presentes a una carpeta llamada "original"
-- Dentro de esa carpeta se crea un archivo .npy para las previsualizaciones de las fotos
-- También se crea un archivo "params.txt" con información sobre la colorización de las fotos
+- El programa mueve todos los RAW presentes a una carpeta llamada "original"
+- Dentro de esa carpeta se crea un archivo .npy para las previsualizaciones de las fotos y uno .pkl para información de exposición
+- También se crea un archivo "params.ini" con información sobre la colorización de las fotos
 
 ### Descripción de barras (en orden de aparición):
      
@@ -77,8 +81,6 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 	Ajuste del nivel mínimo para el recorte de negros
 - White Point:
 	Ajuste del nivel mínimo para recorte de blancos
-- Compress shadows:
-	Ajustar para levantar y comprimir valores negros. Útil para imágenes oscuras
 - Black R/G/B:
 	Ajuste del nivel mínimo para cada canal. Remueve dominantes de color en las sombras.
 - White R/G/B:
@@ -98,7 +100,7 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 	
 ## Cómo construir con Python:
 ### Librerías:
-- Miniconda
+- Miniconda (opcional)
 - Python 3.9
 - Numpy
 	- Nota: numpy instalado con conda incluye las librerías mkl, añadiendo ~700mb extra, a diferencia del numpy instalado con pip
@@ -114,7 +116,6 @@ El programa decodifica, analiza y trabaja directamente sobre el el archivo RAW d
 2. Clonar este repositorio, o descargar `FilmProcesser.py`, `funcs.py` y `setup.py` individualmente
 3. Probar si todo funciona con python y el script
 4. Buscar la ruta de instalación de OpenCV con 
-    `import cv2`
-    `print(cv2.__file__)`
+    `import cv2; print(cv2.__file__)`
 6. Abrir Anaconda prompt
 7. Ejecutar el comando `build.bat`, reemplazando las rutas para cada caso particular

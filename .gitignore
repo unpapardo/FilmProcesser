@@ -7,3 +7,5 @@ build
 dist
 *.bat
 *.ini
+test.py
+gen_alg.py

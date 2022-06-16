@@ -50,16 +50,17 @@ def main():
 
     print()
     print("Especifique reducción de tamaño para previsualizaciones:")
-    print("Dejar en blanco para configuración automática (40%)")
-    print("40% funciona bien para archivos de 20MPx en una pantalla Full HD.")
-    print("Mayor tamaño (cercano a 100%) incrementa la demora del anális previo")
+    print("Dejar en blanco para configuración automática (720p)")
+    print("720px de alto funciona bien para archivos en una pantalla Full HD.")
+    print("Mayor tamaño incrementa la demora del anális previo")
+    print("Tamaño mínimo es 400px")
     while 1:
-        reduce_factor = input("Ingrese cantidad: ")
-        if reduce_factor.isdigit():
-            if int(reduce_factor) > 0 and int(reduce_factor) <= 100:
+        reduce_height = input("Ingrese cantidad: ")
+        if reduce_height.isdigit():
+            if int(reduce_height) >= 400:
                 break
-        elif reduce_factor == "":
-            reduce_factor = "40"
+        elif reduce_height == "":
+            reduce_height = "720"
             break
 
     print()
@@ -82,21 +83,14 @@ def main():
     print()
     print("Desea recortar las imágenes al procesarlas?")
     print("1: Siempre intentar recorte automático")
-    print("2: Siempre especificar manualmente la zona de recorte")
-    print("3: No recortar")
+    print("2: No recortar")
     while 1:
         crop = input("Ingrese opción: ")
         if crop == "1":
             crop = "True"
-            manual_crop = "False"
             break
         if crop == "2":
-            crop = "True"
-            manual_crop = "True"
-            break
-        if crop == "3":
             crop = "False"
-            manual_crop = "False"
             break
 
     print()
@@ -145,10 +139,10 @@ def main():
 
     config["IMAGE PROCESSING"] = {
         "Cropping" : crop,
-        "Always set manual crop" : manual_crop,
         "Luminosity correction" : vig,
         "Interpolation method": interp,
-        "Previsualization reduce factor": reduce_factor,
+        # "Previsualization reduce factor": reduce_factor,
+        "Previsualization reduce height": reduce_height,
         # Possibly add more rawpy settings like half-size interpolation
         }
 

@@ -4,6 +4,7 @@ import os
 from time import sleep
 from multiprocessing import Pool, freeze_support
 from configparser import ConfigParser
+import pickle
 import sys
 import signal
 import numpy as np
@@ -11,9 +12,11 @@ import rawpy as rp
 import cv2
 import tqdm
 import funcs as f
-import exiftool
+from exiftool import ExifTool
 from copy import deepcopy as copy # for debugging
-from funcs import show # for debugging
+from funcs import show, kill_cv2, show2 # for debugging
+
+__version__ = 0.04
 
 formats = [
     "crw",
@@ -63,79 +66,51 @@ args_full = dict(
     )
 
 
-# TODO: Update to configparser would be nice
-def pack_params(need_vig, perc_min_img, perc_max_img, black, white,
-               gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo):
-    out = "\n".join([
-        "Vig correction:",
-        str(need_vig),
-        "",
-        "Minimum values:",
-        np.array2string(perc_min_img, separator=',')[1:-1],
-        "",
-        "Maximum values:",
-        np.array2string(perc_max_img, separator=',')[1:-1],
-        "",
-        "General Gamma:",
-        str(gamma_all),
-        "",
-        "R Gamma:",
-        str(gamma_r),
-        "",
-        "G Gamma:",
-        str(gamma_g),
-        "",
-        "B Gamma:",
-        str(gamma_b),
-        "",
-        "CCM:",
-        np.array2string(ccm.flatten(), separator=',', max_line_width=150)[1:-1],
-        "",
-        "Crop:",
-        ",".join([str(dim) for dim in crop]),
-        "",
-        "Black correction:",
-        ",".join([str(item) for item in black]),
-        "",
-        "White correction:",
-        ",".join([str(item) for item in white]),
-        "",
-        "Shadow compression",
-        str(comp_lo)
-    ])
-    with open('params.txt', 'w') as file:
-        file.write(out)
+def unpack_params():
+    return_folder = False
+    if "original" not in getcwd():
+        return_folder = True
+        chdir("original")
+
+    out = ConfigParser()
+    out.read("params.ini")
+
+    need_vig = out.getboolean("Process", "luminosity correction")
+    need_exp = out.getboolean("Process", "exposure correction")
+    crop = np.fromstring(out["Process"]["crop"], sep=",", dtype=int)
+
+    img_mins = np.fromstring(out["Exposure"]["minimum values"], sep=",")
+    img_maxs = np.fromstring(out["Exposure"]["maximum values"], sep=",")
+    white = np.fromstring(out["Exposure"]["white correction"], sep=",")
+    black = np.fromstring(out["Exposure"]["black correction"], sep=",")
+    # comp_lo = np.fromstring(out["Exposure"]["shadow compression"], sep=",")
+    exp_ev = None
+    if need_exp:
+        with open("params_exp.pkl", "rb") as file:
+            exp_ev = pickle.load(file)
+
+    gamma = np.fromstring(out["Color"]["gamma"], sep=",")
+    ccm = np.fromstring(out["Color"]["ccm"], sep=",").reshape((3, 3))
 
 
-# TODO: Update to configparser would be nice
-def unpack_params(orig = False):
-    unpack_path = "params.txt"
-    if not orig:
-        unpack_path = "original/" + unpack_path
-    with open(unpack_path, "r") as file:
-        params = file.readlines()
-    need_vig = False
-    if params[1] == "True\n":
-        need_vig = True
-    if "None" not in (params[4], params[7]):
-        perc_min_img = np.fromstring(params[4], sep=",")
-        perc_max_img = np.fromstring(params[7], sep=",")
-    else:
-        perc_min_img = None
-        perc_max_img = None
-    gamma_all = float(params[10])
-    gamma_r = float(params[13])
-    gamma_g = float(params[16])
-    gamma_b = float(params[19])
-    ccm = np.fromstring(params[22], sep=",").reshape((3, 3))
-    crop = params[25].split(",")
-    crop = [int(dim) for dim in crop]
-    black = np.fromstring(params[28], sep=",")
-    white = np.fromstring(params[31], sep=",")
-    comp_lo = float(params[34])
+    out = {
+        "vig": need_vig,
+        "exp": need_exp,
+        "crop": crop,
+        "exp ev": exp_ev,
+        "mins": img_mins,
+        "maxs": img_maxs,
+        "white": white,
+        "black": black,
+        "gamma": gamma,
+        # "shadow": comp_lo,
+        "ccm": ccm,
+        }
 
-    return (need_vig, perc_min_img, perc_max_img, black, white,
-            gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo)
+    if return_folder:
+        chdir("..")
+
+    return out
 
 
 # https://stackoverflow.com/questions/68688044/cant-terminate-multiprocessing-program-with-ctrl-c
@@ -143,15 +118,15 @@ def init_pool_read():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-# %% Processer
+# %% Processer defs
 
 write_bit_depth = 65535
-process_params = None
+params = None
 process_vig = None
 et = None
 def init_pool_process(og_path, workpath):
     global write_bit_depth
-    global process_params
+    global params
     global process_vig
     global et
 
@@ -171,42 +146,37 @@ def init_pool_process(og_path, workpath):
     write_bit_depth = (2**write_bit_depth-1)<<(16-write_bit_depth)
     chdir(workpath)
 
-    process_params = unpack_params()
-    if process_params[0] == True: #aka need_vig
+    params = unpack_params()
+    if params["vig"]:
         process_vig = np.load("original/vig.npy")
 
-    et = exiftool.ExifTool(path.join(og_path, "exiftool.exe"))
+    et = ExifTool(path.join(og_path, "exiftool.exe"))
     et.run()
 
 
 def img_process(name):
     try:
-        (need_vig, perc_min_img, perc_max_img, black, white,
-        gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = process_params
-
         with rp.imread("original/" + name) as raw:
             imgp = raw.postprocess(**args_full)
             black_level = raw.black_level_per_channel[0]
 
+        crop = params["crop"]
         imgp = f.r2b(imgp) / 65535
-        imgp = imgp - black_level / 65535
+        imgp -= (black_level / 65535)
         imgp = imgp[slice(*crop[:2]),slice(*crop[2:])]
+
+        if params["exp"]:
+            imgp *= 2**params["exp ev"][name]
 
         if process_vig is not None:
             imgp = np.divide(imgp, process_vig)
 
         imgp = 1 - imgp
-        imgp = (imgp - perc_min_img) / (perc_max_img - perc_min_img)
+        imgp = f.ccmGamma_apply(imgp, params)
 
-        imgp = (imgp + black[0]) / (1 + black[0])
-        imgp = (imgp + black[1:]) / (1 + black[1:])
-
-        _white = (1 + white[0]) * (1 + white[1:])
-        imgp = imgp * _white
-
-        imgp = f.gamma(imgp, gamma_all, gamma_b, gamma_g, gamma_r)
-        imgp = f.CCM(imgp, ccm)
-        imgp = f.compress_shadows(imgp, 0.55, comp_lo)
+        # TODO: dust mask integration
+        # maskp = np.empty_like(imgp[...,0]).astype(np.uint8)
+        # maskp = np.where(imgp>1, 255, 0)
 
         imgp = (np.clip(imgp, 0, 1) * 65535).astype(np.uint16)
         imgp = imgp & write_bit_depth
@@ -219,9 +189,7 @@ def img_process(name):
     except KeyboardInterrupt:
         sys.exit()
 
-# =============================================================================
-# %% first run
-# =============================================================================
+
 def read_proxy(name):
     try:
         with rp.imread(name) as raw:
@@ -231,11 +199,43 @@ def read_proxy(name):
     except KeyboardInterrupt:
         sys.exit()
 
+# %% main defs
 def main():
-# if __name__ == "__main__":
+    def pack_params():
+        # list 2 string
+        def l2s(src:list):
+            return ", ".join([str(item) for item in src])
+
+        out = ConfigParser()
+        out["Process"] = {
+            "Luminosity correction": str(need_vig),
+            "Exposure correction": str(need_exp),
+            "Crop": l2s(crop),
+            }
+        out["Exposure"] = {
+            "Minimum values": l2s(img_mins),
+            "Maximum values": l2s(img_maxs),
+            "White correction": l2s(color["white"]),
+            "Black correction": l2s(color["black"]),
+            # "Shadow compression": str(color["shadow"]),
+            }
+        out["Color"] = {
+            "Gamma": l2s(color["gamma"]),
+            "CCM": np.array2string(color["ccm"].flatten(), separator=',')[1:-1],
+            }
+
+        with open('params.ini', 'w') as file:
+            out.write(file)
+
+        if need_exp:
+            exp_ev_out = dict(zip(imglist, exp_ev))
+            with open("params_exp.pkl", "wb") as file:
+                pickle.dump(exp_ev_out, file)
+
+    # %% main init
     original_path = getcwd()
     freeze_support()
-    print("FilmProcesser v0.03")
+    print(f"FilmProcesser v{__version__}")
     print("-------------------")
     print()
 
@@ -247,7 +247,6 @@ def main():
         except ValueError:
             max_processes = None
         need_crop = config.getboolean("IMAGE PROCESSING", "Cropping")
-        need_roi = config.getboolean("IMAGE PROCESSING", "Always set manual crop")
         need_vig = config.getboolean("IMAGE PROCESSING", "Luminosity correction")
         _interp = config["IMAGE PROCESSING"]["Interpolation method"]
         if _interp == "LINEAR":
@@ -256,7 +255,8 @@ def main():
             args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.AHD
         elif _interp == "DHT":
             args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.DHT
-        reduce_factor = config.getint("IMAGE PROCESSING", "Previsualization reduce factor")
+        # reduce_factor = config.getint("IMAGE PROCESSING", "Previsualization reduce factor")
+        reduce_height = config.getint("IMAGE PROCESSING", "Previsualization reduce height")
     else:
         print("Por favor ejecute setup.exe primero")
         print("Cerrando programa en 5 segundos...")
@@ -293,9 +293,7 @@ def main():
     chdir("original")
     flist = [file.lower() for file in listdir()]
 
-    if "params.txt" in flist:
-        (need_vig, perc_min_img, perc_max_img, black, white,
-         gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo) = unpack_params(orig = True)
+    if "params.ini" in flist and "proxy.npy" in flist:
         print("Se ha encontrado archivo de configuración")
         key = input("Recolorizar? [Y]/n: ").lower()
         while key.lower() not in ("y", "n", ""):
@@ -304,13 +302,11 @@ def main():
             need_proxy = 2
         if key == "n":
             need_proxy = 0
-    elif "proxy.npy" in flist:
-        need_proxy = 2
     else:
         need_proxy = 1
 
     imglist = []
-    if need_vig:
+    if need_vig and need_proxy:
         if f"vig.{extension}" in flist:
             imglist.append(f"vig.{extension}")
         else:
@@ -327,10 +323,7 @@ def main():
         if file[-3:] == extension and "vig" not in file.lower():
             imglist.append(file)
 
-    if need_proxy == 2:
-        if "proxy.npy" not in flist:
-            need_proxy = 1
-
+    # %% proxy loading
     if need_proxy == 1:
         print("Leyendo RAWs...")
         # maybe specify max amount of processes
@@ -338,20 +331,40 @@ def main():
             img = []
             for _res in exe.imap(read_proxy, imglist):
                 img.append(_res)
+            img = np.array(img)
+        if img.ndim == 3:
+            img = img[None,...]
 
         with rp.imread(imglist[0]) as raw:
             black_level = raw.black_level_per_channel[0]
+        # black_level = 0
 
-        # TODO: implement exposure scaling
-        # with exiftool.ExifTool(path.join(original_path, "exiftool.exe")) as et:
-        #     meta = et.get_metadata_batch(imglist)
+        with ExifTool(path.join(original_path, "exiftool.exe")) as et:
+            meta = []
+            for _img in imglist:
+                meta.append(et.execute_json(_img)[0])
+        exp_shutter = np.array([float(item["EXIF:ShutterSpeedValue"]) for item in meta])
+        exp_aperture = np.array([float(item["EXIF:ApertureValue"]) for item in meta])
+        exp_iso = np.array([float(item["EXIF:ISO"]) for item in meta])
+        exp_ev = np.log2(exp_aperture**2 / (exp_shutter * exp_iso/100))
+        exp_ev -= exp_ev.max()
+
+        need_exp = False
+        if len(set(exp_ev)) > 1:
+            print("Advertencia: se han encontrado diferentes valores de exposición")
+            key = input("Desea normalizar exposiciones? [Y]/n: ").lower()
+            while 1:
+                if key in ("y", ""):
+                    need_exp = True
+                    break
+                if key == "n":
+                    break
 
         # img0=copy(img) #for debugging purposes
-
-        margin=5
+        # %% proxy cropping
         # crop is (y1,y2,x1,x2)
         crop = []
-        if need_crop and not need_roi:
+        if need_crop:
             for i in range(2):
                 crop_bool = np.sum(np.sum(img[0].astype(int)-black_level, axis=2), axis=(1-i))
                 crop_bool = np.divide(crop_bool, np.percentile(crop_bool, 75))
@@ -359,61 +372,47 @@ def main():
                 crop_bool = np.diff(crop_bool)
                 crop_bool2 = crop_bool.nonzero()[0]
                 if len(crop_bool2) == 0:
-                    crop.append([margin, -margin])
+                    crop.append([0, img.shape[1+i]])
                 elif len(crop_bool2) == 1:
                     # -1 is true to false (start crop region)
                     if crop_bool[crop_bool2[0]] == -1:
                         # add cropping region warnings if needed
-                        crop.append([margin, crop_bool2[0]-margin])
+                        crop.append([0, crop_bool2[0]])
                     # 1 is false to true (end crop region)
                     else:
-                        crop.append([crop_bool2[0]+margin, -margin])
+                        crop.append([crop_bool2[0], img.shape[1+i]])
                 else:
                     if crop_bool[crop_bool2[0]] == 1 and crop_bool[crop_bool2[-1]] == -1:
-                        crop.append([crop_bool2[0]+margin, crop_bool2[-1]-margin])
+                        crop.append([crop_bool2[0], crop_bool2[-1]])
                     else:
-                        # TODO: do something if it doesnt match in the future, meanwhile do nothing
-                        crop.append([margin, -margin])
-            crop = list(np.array(crop).flatten())
+                        crop.append([0, img.shape[1+i]])
+            crop = np.array(crop).flatten()
 
+            print("----------")
+            print("Previsualización de recorte...")
+            print("Apretar Esc para cerrar")
+            temp_img = f.resize(img[need_vig:], dim2=reduce_height)
+            temp_img = f.norm(65535-temp_img,
+                              th_lo=10, th_hi=90, skip=4).astype(np.float16)
+            crop_temp = np.array([dim * reduce_height / img.shape[1] for dim in crop])
+            crop = f.show_crop(temp_img, coords=crop_temp)
+            del temp_img
 
-            crop_img_prev = img[need_vig].copy()[slice(*crop[:2]),slice(*crop[2:])]
-            crop_img_prev = 1-f.norm(crop_img_prev)
-            crop_img_prev = f.resize(crop_img_prev, reduce_factor)
-
-            while 1:
-                print("----------")
-                print("Previsualización de recorte...")
-                print("Apretar Esc para cerrar")
-                print("NO CERRAR CON EL ÍCONO DE CERRAR")
-                f.show(crop_img_prev)
-                key = input("El area del auto recorte es correcto? [Y]/n: ").lower()
-                if key in ("", "y"):
-                    break
-                if key == "n":
-                    need_roi = True
-                    break
-
-        if need_crop and need_roi:
-            crop_img_prev = img[0].copy()
-            crop_img_prev = 1-f.norm(crop_img_prev)
-            crop_img_prev = f.resize(crop_img_prev, reduce_factor)
-            print("Ingrese área de recorte manualmente...")
-            print("Para finalizar aprete Enter")
-            roi = cv2.selectROI(crop_img_prev)
-            cv2.destroyAllWindows()
-            roi = [int(dim/(reduce_factor/100)) for dim in roi]
-            crop = (roi[1], roi[1]+roi[3], roi[0], roi[0]+roi[2])
-
-        if not need_crop:
+        else:
             crop = [None] * 4
 
-        img = np.array(img)
+        crop = (crop * img.shape[1] / reduce_height).astype(int)
         img = img[:,slice(*crop[:2]),slice(*crop[2:])]
         crop = [dim*2 if dim is not None else None for dim in crop] #bc it was half-sized
-        img = np.array([f.resize(image, reduce_factor) for image in img])
+        img = f.resize(img, dim2=reduce_height)
+
+        # %% proxy process
         img = img / 65535
-        img = img - black_level / 65535
+        img -= (black_level / 65535)
+        if need_exp:
+            img *= 2**exp_ev[:,None,None,None]
+        img = 1-img
+
 
         if need_vig:
             if "vig.npy" not in listdir():
@@ -435,18 +434,15 @@ def main():
             print("Aplicando corrección de luminosidad...")
             img = np.divide(img, vig)
 
-        print("Invirtiendo...")
-        img = 1 - img
-
         print("Obteniendo percentiles extremos...")
-        perc_max_img = np.empty(3)
-        perc_min_img = np.empty(3)
-        for j in range(3):
-            perc_min_img[j] = np.percentile(img[..., j], 0.075)
-            perc_max_img[j] = np.percentile(img[..., j], 99.8)*1.0025
+        img_mins = np.percentile(img, 0.055, axis=(0,1,2))
+        img_maxs = np.percentile(img, 99.75, axis=(0,1,2))
 
         print("Normalizando...")
-        img = (img - perc_min_img) / (perc_max_img - perc_min_img)
+        img = (img - img_mins) / (img_maxs - img_mins)
+
+        print("Calculando gammas automáticamente...")
+        gamma_pre = f.calc_gamma(img)
 
         print("Guardando proxies...")
         np.save("proxy.npy", img.astype(np.float32))
@@ -455,15 +451,30 @@ def main():
         print("Leyendo proxies...")
         img = np.load("proxy.npy")
 
+        params = unpack_params()
+        need_vig = params["vig"]
+        need_exp = params["exp"]
+        crop = params["crop"]
+        img_mins = params["mins"]
+        img_maxs = params["maxs"]
+
+        print("Calculando gammas automáticamente...")
+        gamma_pre = f.calc_gamma(img)
+
     if need_proxy:
         print("Obteniendo valores de colorización...")
-        ccm, black, white, gamma_all, gamma_b, gamma_g, gamma_r, comp_lo = f.ccmGamma(img)
+        color = f.ccmGamma(img, dim2=reduce_height, init_gamma=gamma_pre)
 
-        pack_params(need_vig, perc_min_img, perc_max_img, black, white,
-                   gamma_all, gamma_b, gamma_g, gamma_r, ccm, crop, comp_lo)
+        pack_params()
+
     # =============================================================================
     # %% final pass
     # =============================================================================
+    print("-----------")
+    print("Iniciando proceso en 3 segundos...")
+    print("Ctrl+C para cancelar")
+    for __ in range(3*60):
+        sleep(1/60)
     print("-----------")
     print("Procesando RAWs")
     print("Esto puede tomar unos minutos...")
@@ -485,7 +496,12 @@ def main():
     #     img_process(_img)
 
     chdir(filename)
-    del_files = input("Desea eliminar los archivo proxy? y/[N]: ")
+    if "img" in dir():
+        del_files = input(f"Desea eliminar los archivo proxy? ({round(img.nbytes/10**6)}Mb)\n"
+                          "y/[N]: ")
+    else:
+        del_files = input("Desea eliminar los archivo proxy?\n"
+                          "y/[N]: ")
     while del_files not in ("y", "n", ""):
         del_files = input("y/n: ").lower()
     if del_files == "y":
