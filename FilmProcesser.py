@@ -390,7 +390,7 @@ def main():
 
             print("----------")
             print("Previsualización de recorte...")
-            print("Apretar Esc para cerrar")
+            print("Apretar Esc o Enter para cerrar")
             temp_img = f.resize(img[need_vig:], dim2=reduce_height)
             temp_img = f.norm(65535-temp_img,
                               th_lo=10, th_hi=90, skip=4).astype(np.float16)
@@ -411,7 +411,6 @@ def main():
         img -= (black_level / 65535)
         if need_exp:
             img *= 2**exp_ev[:,None,None,None]
-        img = 1-img
 
 
         if need_vig:
@@ -435,6 +434,7 @@ def main():
             img = np.divide(img, vig)
 
         print("Obteniendo percentiles extremos...")
+        img = 1-img
         img_mins = np.percentile(img, 0.055, axis=(0,1,2))
         img_maxs = np.percentile(img, 99.75, axis=(0,1,2))
 
@@ -463,6 +463,7 @@ def main():
 
     if need_proxy:
         print("Obteniendo valores de colorización...")
+        print("Apretar Esc o Enter para cerrar")
         color = f.ccmGamma(img, dim2=reduce_height, init_gamma=gamma_pre)
 
         pack_params()
