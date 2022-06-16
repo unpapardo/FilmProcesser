@@ -172,6 +172,8 @@ def img_process(name):
             imgp = np.divide(imgp, process_vig)
 
         imgp = 1 - imgp
+        imgp = (imgp - params["mins"]) / (params["maxs"] - params["mins"])
+
         imgp = f.ccmGamma_apply(imgp, params)
 
         # TODO: dust mask integration
