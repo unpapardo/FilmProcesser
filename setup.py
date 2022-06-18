@@ -18,6 +18,7 @@ def close():
     sleep(2)
     sys.exit()
 
+
 def main():
     print("FilmProcesser Setup")
     print("Presione Ctrl+C para cancelar")
@@ -133,29 +134,30 @@ def main():
 
     config["SYSTEM"] = {
         # None = Auto
-        "Process count" : max_processes,
+        "Process count": max_processes,
         # In the future, internal float32/16 can be used instead of float64 to further decrease memory usage
-        }
+    }
 
     config["IMAGE PROCESSING"] = {
-        "Cropping" : crop,
-        "Luminosity correction" : vig,
+        "Cropping": crop,
+        "Luminosity correction": vig,
         "Interpolation method": interp,
         # "Previsualization reduce factor": reduce_factor,
         "Previsualization reduce height": reduce_height,
         # Possibly add more rawpy settings like half-size interpolation
-        }
+    }
 
     config["IMAGE OUTPUT"] = {
-        "Bit depth" : bit_depth,
+        "Bit depth": bit_depth,
         # "Compression" : "None",
-        }
+    }
 
     with open('setup.ini', 'w') as configfile:
         config.write(configfile)
 
     print("Finalizado correctamente")
     close()
+
 
 if __name__ == "__main__":
     try:

@@ -4,6 +4,7 @@ import os
 from time import sleep
 from multiprocessing import Pool, freeze_support
 from configparser import ConfigParser
+import warnings
 import pickle
 import sys
 import signal
@@ -13,8 +14,8 @@ import cv2
 import tqdm
 import funcs as f
 from exiftool import ExifTool
-from copy import deepcopy as copy # for debugging
-from funcs import show, kill_cv2, show2 # for debugging
+from copy import deepcopy as copy  # for debugging
+from funcs import show, kill_cv2, show2  # for debugging
 
 __version__ = 0.04
 
@@ -27,7 +28,7 @@ formats = [
     "rw2",
     "raf",
     "dng",
-    ]
+]
 
 args_proxy = dict(
     demosaic_algorithm=rp.DemosaicAlgorithm.LINEAR,
@@ -45,7 +46,7 @@ args_proxy = dict(
     gamma=(1, 1),
     user_flip=0,
     # bright=4
-    )
+)
 
 args_full = dict(
     # demosaic_algorithm=rp.DemosaicAlgorithm.DHT, #now set by setup.ini
@@ -63,7 +64,7 @@ args_full = dict(
     gamma=(1, 1),
     # user_flip=0
     # bright=4
-    )
+)
 
 
 def unpack_params():
@@ -92,7 +93,6 @@ def unpack_params():
     gamma = np.fromstring(out["Color"]["gamma"], sep=",")
     ccm = np.fromstring(out["Color"]["ccm"], sep=",").reshape((3, 3))
 
-
     out = {
         "vig": need_vig,
         "exp": need_exp,
@@ -105,7 +105,7 @@ def unpack_params():
         "gamma": gamma,
         # "shadow": comp_lo,
         "ccm": ccm,
-        }
+    }
 
     if return_folder:
         chdir("..")
@@ -124,6 +124,8 @@ write_bit_depth = 65535
 params = None
 process_vig = None
 et = None
+
+
 def init_pool_process(og_path, workpath):
     global write_bit_depth
     global params
@@ -143,7 +145,7 @@ def init_pool_process(og_path, workpath):
     elif _interp == "DHT":
         args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.DHT
     write_bit_depth = config.getint("IMAGE OUTPUT", "Bit depth")
-    write_bit_depth = (2**write_bit_depth-1)<<(16-write_bit_depth)
+    write_bit_depth = (2**write_bit_depth-1) << (16-write_bit_depth)
     chdir(workpath)
 
     params = unpack_params()
@@ -163,7 +165,7 @@ def img_process(name):
         crop = params["crop"]
         imgp = f.r2b(imgp) / 65535
         imgp -= (black_level / 65535)
-        imgp = imgp[slice(*crop[:2]),slice(*crop[2:])]
+        imgp = imgp[slice(*crop[:2]), slice(*crop[2:])]
 
         if params["exp"]:
             imgp *= 2**params["exp ev"][name]
@@ -184,10 +186,11 @@ def img_process(name):
         imgp = imgp & write_bit_depth
 
         cv2.imwrite(name[:-3].upper() + "tiff", imgp,
-                    (cv2.IMWRITE_TIFF_COMPRESSION, 32946)) #to use deflate compression
+                    (cv2.IMWRITE_TIFF_COMPRESSION, 32946))
+        # to use deflate compression
 
         et.execute(f'-tagsfromfile=original/{name}',
-                    "-overwrite_original_in_place", name[:-3]+"tiff")
+                   "-overwrite_original_in_place", name[:-3]+"tiff")
     except KeyboardInterrupt:
         sys.exit()
 
@@ -202,10 +205,12 @@ def read_proxy(name):
         sys.exit()
 
 # %% main defs
+
+
 def main():
     def pack_params():
         # list 2 string
-        def l2s(src:list):
+        def l2s(src: list):
             return ", ".join([str(item) for item in src])
 
         out = ConfigParser()
@@ -213,18 +218,18 @@ def main():
             "Luminosity correction": str(need_vig),
             "Exposure correction": str(need_exp),
             "Crop": l2s(crop),
-            }
+        }
         out["Exposure"] = {
             "Minimum values": l2s(img_mins),
             "Maximum values": l2s(img_maxs),
             "White correction": l2s(color["white"]),
             "Black correction": l2s(color["black"]),
             # "Shadow compression": str(color["shadow"]),
-            }
+        }
         out["Color"] = {
             "Gamma": l2s(color["gamma"]),
             "CCM": np.array2string(color["ccm"].flatten(), separator=',')[1:-1],
-            }
+        }
 
         with open('params.ini', 'w') as file:
             out.write(file)
@@ -249,7 +254,8 @@ def main():
         except ValueError:
             max_processes = None
         need_crop = config.getboolean("IMAGE PROCESSING", "Cropping")
-        need_vig = config.getboolean("IMAGE PROCESSING", "Luminosity correction")
+        need_vig = config.getboolean(
+            "IMAGE PROCESSING", "Luminosity correction")
         _interp = config["IMAGE PROCESSING"]["Interpolation method"]
         if _interp == "LINEAR":
             args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.LINEAR
@@ -258,7 +264,8 @@ def main():
         elif _interp == "DHT":
             args_full["demosaic_algorithm"] = rp.DemosaicAlgorithm.DHT
         # reduce_factor = config.getint("IMAGE PROCESSING", "Previsualization reduce factor")
-        reduce_height = config.getint("IMAGE PROCESSING", "Previsualization reduce height")
+        reduce_height = config.getint(
+            "IMAGE PROCESSING", "Previsualization reduce height")
     else:
         print("Por favor ejecute setup.exe primero")
         print("Cerrando programa en 5 segundos...")
@@ -335,7 +342,7 @@ def main():
                 img.append(_res)
             img = np.array(img)
         if img.ndim == 3:
-            img = img[None,...]
+            img = img[None, ...]
 
         with rp.imread(imglist[0]) as raw:
             black_level = raw.black_level_per_channel[0]
@@ -345,11 +352,35 @@ def main():
             meta = []
             for _img in imglist:
                 meta.append(et.execute_json(_img)[0])
-        exp_shutter = np.array([float(item["EXIF:ShutterSpeedValue"]) for item in meta])
-        exp_aperture = np.array([float(item["EXIF:ApertureValue"]) for item in meta])
-        exp_iso = np.array([float(item["EXIF:ISO"]) for item in meta])
-        exp_ev = np.log2(exp_aperture**2 / (exp_shutter * exp_iso/100))
-        exp_ev -= exp_ev.max()
+
+        try:
+            exp_shutter = np.array(
+                [float(item["EXIF:ExposureTime"]) for item in meta])
+            exp_aperture = np.array(
+                [float(item["EXIF:FNumber"]) for item in meta])
+            exp_iso = np.array([float(item["EXIF:ISO"]) for item in meta])
+        except NameError:
+            print("----------")
+            print("No se pudo identificar la exposición automáticamente")
+            print("Por favor reportar este problema e indicar el modelo de cámara")
+            input("Presione cualquier tecla para continuar con el programa...")
+            print("----------")
+            exp_ev = [None]
+
+        if exp_ev is not None:
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                try:
+                    exp_ev = np.log2(exp_aperture**2 / (exp_shutter * exp_iso/100))
+                    exp_ev -= exp_ev.max()
+                except RuntimeWarning:
+                    print("----------")
+                    print("No se pudo calcular la exposición automáticamente")
+                    print("Uno de los valores de apertura, exposición o ISO son inválidos")
+                    print("Puede suceder por usar lentes manuales o defectuosos")
+                    input("Presione cualquier tecla para continuar con el programa...")
+                    print("----------")
+                    exp_ev = [None]
 
         need_exp = False
         if len(set(exp_ev)) > 1:
@@ -368,7 +399,8 @@ def main():
         crop = []
         if need_crop:
             for i in range(2):
-                crop_bool = np.sum(np.sum(img[0].astype(int)-black_level, axis=2), axis=(1-i))
+                crop_bool = np.sum(np.sum(img[0].astype(
+                    int)-black_level, axis=2), axis=(1-i))
                 crop_bool = np.divide(crop_bool, np.percentile(crop_bool, 75))
                 crop_bool = (crop_bool > 0.6).astype(int)
                 crop_bool = np.diff(crop_bool)
@@ -396,7 +428,8 @@ def main():
             temp_img = f.resize(img[need_vig:], dim2=reduce_height)
             temp_img = f.norm(65535-temp_img,
                               th_lo=10, th_hi=90, skip=4).astype(np.float16)
-            crop_temp = np.array([dim * reduce_height / img.shape[1] for dim in crop])
+            crop_temp = np.array(
+                [dim * reduce_height / img.shape[1] for dim in crop])
             crop = f.show_crop(temp_img, coords=crop_temp)
             del temp_img
 
@@ -404,30 +437,30 @@ def main():
             crop = [None] * 4
 
         crop = (crop * img.shape[1] / reduce_height).astype(int)
-        img = img[:,slice(*crop[:2]),slice(*crop[2:])]
-        crop = [dim*2 if dim is not None else None for dim in crop] #bc it was half-sized
+        img = img[:, slice(*crop[:2]), slice(*crop[2:])]
+        # bc it was half-sized
+        crop = [dim*2 if dim is not None else None for dim in crop]
         img = f.resize(img, dim2=reduce_height)
 
         # %% proxy process
         img = img / 65535
         img -= (black_level / 65535)
         if need_exp:
-            img *= 2**exp_ev[:,None,None,None]
-
+            img *= 2**exp_ev[:, None, None, None]
 
         if need_vig:
             if "vig.npy" not in listdir():
                 print("Creando archivo de corrección de luminosidad...")
                 with rp.imread(imglist[0]) as raw:
                     vig = raw.postprocess(**args_full)
-                vig = vig[slice(*crop[:2]),slice(*crop[2:])]
+                vig = vig[slice(*crop[:2]), slice(*crop[2:])]
                 vig = vig - black_level
                 vig = f.r2b(vig)
-                vig = cv2.blur(vig, (150,150))
+                vig = cv2.blur(vig, (150, 150))
                 vig = np.divide(vig, np.max(vig))
                 np.save("vig.npy", vig.astype(np.float16))
 
-            vig = cv2.blur(img[0], (30,30))
+            vig = cv2.blur(img[0], (30, 30))
             vig = np.divide(vig, np.max(vig))
             img = np.delete(img, 0, 0)
             del imglist[0]
@@ -437,8 +470,8 @@ def main():
 
         print("Obteniendo percentiles extremos...")
         img = 1-img
-        img_mins = np.percentile(img, 0.055, axis=(0,1,2))
-        img_maxs = np.percentile(img, 99.75, axis=(0,1,2))
+        img_mins = np.percentile(img, 0.055, axis=(0, 1, 2))
+        img_maxs = np.percentile(img, 99.75, axis=(0, 1, 2))
 
         print("Normalizando...")
         img = (img - img_mins) / (img_maxs - img_mins)
@@ -509,6 +542,7 @@ def main():
         del_files = input("y/n: ").lower()
     if del_files == "y":
         f.cmd("del original\\*.npy")
+
 
 if __name__ == "__main__":
     freeze_support()

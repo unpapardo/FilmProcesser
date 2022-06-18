@@ -45,7 +45,7 @@ def cmd(comando):
 
 
 @kill_cv2_on_error
-def show(src, fac=100, dim1:int=None, dim2:int=None, verbose=False):
+def show(src, fac=100, dim1: int = None, dim2: int = None, verbose=False):
     """
     Shows a scaled image or sequence of images. Also prints the current index.
 
@@ -58,10 +58,10 @@ def show(src, fac=100, dim1:int=None, dim2:int=None, verbose=False):
         is performed.
     """
     if src.ndim == 2:
-        src = src[None,...]
+        src = src[None, ...]
     elif src.ndim == 3:
         if src.shape[-1] == 3:
-            src = src[None,...]
+            src = src[None, ...]
 
     if src.dtype in (float, np.float16, np.float32):
         if src.max() > 50 and src.max() < 300:
@@ -102,12 +102,16 @@ def show(src, fac=100, dim1:int=None, dim2:int=None, verbose=False):
 def show2(src):
     show(src, fac=None, dim1=None, dim2=720)
 
-_pressed=False
+
+_pressed = False
+
+
 @kill_cv2_on_error
-def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=None) -> tuple:
+def show_crop(src, fac=100, dim1: int = None, dim2: int = None,
+              verbose=False, coords=None) -> tuple:
     # crop is (y1,y2,x1,x2)
     # cv2 rectangle is (x1,y1), (x2,y2)
-    def mouse_click(event,x,y,flags,param):
+    def mouse_click(event, x, y, flags, param):
         global coord_change
         global _pressed
         global mode
@@ -117,7 +121,7 @@ def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=
         if event == cv2.EVENT_LBUTTONDOWN:
             _pressed = True
             x_check = 0
-            y_check= 0
+            y_check = 0
             mode = None
             if np.abs(y - coords[0]) < 10:
                 y_check = 1
@@ -143,10 +147,10 @@ def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=
             if _pressed:
                 if mode == "vertex":
                     coords[-1+y_check] = y
-                    coords[ 1+x_check] = x
+                    coords[1+x_check] = x
 
                 elif mode == "col":
-                    coords[ 1+x_check] = x
+                    coords[1+x_check] = x
 
                 elif mode == "row":
                     coords[-1+y_check] = y
@@ -163,10 +167,10 @@ def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=
     # crop is (y1,y2,x1,x2)
     # cv2 rectangle is (x1,y1), (x2,y2)
     if src.ndim == 2:
-        src = src[None,...]
+        src = src[None, ...]
     elif src.ndim == 3:
         if src.shape[-1] == 3:
-            src = src[None,...]
+            src = src[None, ...]
 
     src = f2u(src.copy(), 8)
 
@@ -175,7 +179,8 @@ def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=
 
     if coords is None:
         src_check = resize(src[0], fac, dim1, dim2)
-        coords = np.array((50, src_check.shape[0]-50, 50, src_check.shape[1]-50))
+        coords = np.array(
+            (50, src_check.shape[0]-50, 50, src_check.shape[1]-50))
     else:
         coords = np.array(coords, dtype=int)
         if dim1 is not None:
@@ -190,7 +195,8 @@ def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=
     cv2.setMouseCallback('Crop Select', mouse_click)
     while 1:
         if i_change:
-            if verbose: print(i_actual)
+            if verbose:
+                print(i_actual)
             temp = resize(src[i_actual], fac, dim1, dim2)
             i_change = False
             coord_change = True
@@ -198,7 +204,7 @@ def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=
         vertex1 = (coords[2], coords[0])
         vertex2 = (coords[3], coords[1])
         temp2 = temp.copy()
-        cv2.rectangle(temp2, vertex1, vertex2, (20,20,255), 2)
+        cv2.rectangle(temp2, vertex1, vertex2, (20, 20, 255), 2)
         cv2.imshow("Crop Select", temp2)
 
         key = cv2.waitKey(1) & 0xFF
@@ -225,17 +231,18 @@ def show_crop(src, fac=100, dim1:int=None, dim2:int=None, verbose=False, coords=
     coords[2:] = np.clip(coords[2:], 0, src.shape[2])
 
     return np.array((
-        min(coords[0], coords[1]),max(coords[0], coords[1]),
-        min(coords[2], coords[3]),max(coords[2], coords[3]),
-        ))
+        min(coords[0], coords[1]), max(coords[0], coords[1]),
+        min(coords[2], coords[3]), max(coords[2], coords[3]),
+    ))
 
 
-def resize(src:np.ndarray, fac:float=None, dim1:int=None, dim2:int=None,
-           nearest:bool=False, no_upsize:bool=False) -> np.ndarray:
+def resize(src: np.ndarray, fac: float = None,
+           dim1: int = None, dim2: int = None,
+           nearest: bool = False, no_upsize: bool = False) -> np.ndarray:
     inter = cv2.INTER_NEAREST if nearest else None
 
     if (isinstance(src, np.ndarray) and (src.ndim == 2
-                                 or (src.ndim == 3 and src.shape[-1] == 3))):
+                                         or (src.ndim == 3 and src.shape[-1] == 3))):
         if fac is not None and dim1 is None and dim2 is None:
             if fac == 100:
                 return src
@@ -246,7 +253,8 @@ def resize(src:np.ndarray, fac:float=None, dim1:int=None, dim2:int=None,
         elif dim1 or dim2:
             if dim1 and dim2:
                 warnings.warn(
-                    "As dim1 and dim2 are provided, stretching might occur", SyntaxWarning)
+                    "As dim1 and dim2 are provided, stretching might occur",
+                    SyntaxWarning)
                 dims = (dim1, dim2)
                 if np.sign(src.shape[1] - src.shape[0]) != np.sign(dim1 - dim2):
                     dims = (dim2, dim1)
@@ -269,9 +277,9 @@ def resize(src:np.ndarray, fac:float=None, dim1:int=None, dim2:int=None,
 
     else:
         ret_type = type(src)
-        if ret_type is np.ndarray: ret_type = np.array
+        if ret_type is np.ndarray:
+            ret_type = np.array
         return ret_type([resize(_img, fac, dim1, dim2, nearest) for _img in src])
-
 
 
 # def cropresize(src, fac, crop, y=0, x=0):
@@ -305,7 +313,7 @@ def resize(src:np.ndarray, fac:float=None, dim1:int=None, dim2:int=None,
 
 def CCM(src_arr, ccm):
     src_arr = r2b(src_arr)
-    src_arr = np.matmul(src_arr,ccm.T)
+    src_arr = np.matmul(src_arr, ccm.T)
     src_arr = r2b(src_arr)
     return src_arr
 
@@ -319,7 +327,7 @@ def gamma(src, gammaA, gammaB=None, gammaG=None, gammaR=None):
             # src = np.power(src, 1 / vec_gamma)
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore')
-            src = np.exp(np.log(src) / vec_gamma) #equivalent but faster
+            src = np.exp(np.log(src) / vec_gamma)  # equivalent but faster
 
     else:
         with warnings.catch_warnings():
@@ -331,18 +339,20 @@ def gamma(src, gammaA, gammaB=None, gammaG=None, gammaR=None):
 
 
 @kill_cv2_on_error
-def ccmGamma(src_arr:np.ndarray, fac:float=None, dim1=None, dim2=720,
-             init_gamma:np.ndarray=None) -> dict:
+def ccmGamma(src_arr: np.ndarray, fac: float = None, dim1=None, dim2=720,
+             init_gamma: np.ndarray = None) -> dict:
     def nothing(p): pass
+
     def gammaChange(p):
         global gamma_update
         gamma_update = True
 
-    if src_arr.ndim == 3: src_arr = src_arr[None, ...]
+    if src_arr.ndim == 3:
+        src_arr = src_arr[None, ...]
 
     i = 0
 
-    if 1: #create trackbars
+    if 1:  # create trackbars
         cv2.namedWindow('image')
         cv2.namedWindow('histogram')
         cv2.namedWindow('tracks', cv2.WINDOW_NORMAL)
@@ -372,10 +382,14 @@ def ccmGamma(src_arr:np.ndarray, fac:float=None, dim1=None, dim2=720,
             init_gamma[0] = 100/2 * (np.log(init_gamma[0])/np.log(4) + 1.6)
             init_gamma[1:] = 100/2 * (np.log(init_gamma[1:])/np.log(3) + 1.6)
             init_gamma = init_gamma.astype(int)
-            cv2.createTrackbar('All-gamma', 'tracks', init_gamma[0], 100, gammaChange)
-            cv2.createTrackbar('Rgamma',    'tracks', init_gamma[3], 100, gammaChange)
-            cv2.createTrackbar('Ggamma',    'tracks', init_gamma[2], 100, gammaChange)
-            cv2.createTrackbar('Bgamma',    'tracks', init_gamma[1], 100, gammaChange)
+            cv2.createTrackbar('All-gamma', 'tracks',
+                               init_gamma[0], 100, gammaChange)
+            cv2.createTrackbar('Rgamma',    'tracks',
+                               init_gamma[3], 100, gammaChange)
+            cv2.createTrackbar('Ggamma',    'tracks',
+                               init_gamma[2], 100, gammaChange)
+            cv2.createTrackbar('Bgamma',    'tracks',
+                               init_gamma[1], 100, gammaChange)
 
         cv2.createTrackbar('Disable CCM', 'tracks', 0, 1, nothing)
         cv2.createTrackbar('Reset',       'tracks', 0, 1, nothing)
@@ -406,18 +420,20 @@ def ccmGamma(src_arr:np.ndarray, fac:float=None, dim1=None, dim2=720,
             i %= len(src_arr)
             src = resize(src_arr[i], fac, dim1, dim2)
 
-        if 1: #Getting positions
+        if 1:  # Getting positions
             # comp_lo = cv2.getTrackbarPos('Compress lo', 'tracks') / 100
             # comp_hi = cv2.getTrackbarPos('Compress hi', 'tracks') / 100
 
             black = np.empty(4, dtype=float)
-            black[0] = cv2.getTrackbarPos('Black point', 'tracks') / 1000 * 15 - 0.375
+            black[0] = cv2.getTrackbarPos(
+                'Black point', 'tracks') / 1000 * 15 - 0.375
             black[1] = cv2.getTrackbarPos('Black B', 'tracks') / 1000 * 4 - 0.2
             black[2] = cv2.getTrackbarPos('Black G', 'tracks') / 1000 * 4 - 0.2
             black[3] = cv2.getTrackbarPos('Black R', 'tracks') / 1000 * 4 - 0.2
 
             white = np.empty(4, dtype=float)
-            white[0] = cv2.getTrackbarPos('White point', 'tracks') / 1000 * 4 - 0.2
+            white[0] = cv2.getTrackbarPos(
+                'White point', 'tracks') / 1000 * 4 - 0.2
             white[1] = cv2.getTrackbarPos('White B', 'tracks') / 1000 * 2 - 0.1
             white[2] = cv2.getTrackbarPos('White G', 'tracks') / 1000 * 2 - 0.1
             white[3] = cv2.getTrackbarPos('White R', 'tracks') / 1000 * 2 - 0.1
@@ -502,7 +518,8 @@ def ccmGamma(src_arr:np.ndarray, fac:float=None, dim1=None, dim2=720,
 
     return out
 
-def ccmGamma_apply(src:np.ndarray, params_in:dict) -> np.ndarray:
+
+def ccmGamma_apply(src: np.ndarray, params_in: dict) -> np.ndarray:
     black = params_in["black"]
     white = params_in["white"]
     gammas = params_in["gamma"]
@@ -639,42 +656,42 @@ def ccmGamma_apply(src:np.ndarray, params_in:dict) -> np.ndarray:
 
 
 def diffshow(src, fac):
-    src = np.interp(src, (src.min(), src.max()), (0,1))
+    src = np.interp(src, (src.min(), src.max()), (0, 1))
     show(src, fac)
 
 
 def bgr2gray(src):
-    return src[...,2] * 0.299 + src[...,1] * 0.587 + src[...,0] * 0.114
+    return src[..., 2] * 0.299 + src[..., 1] * 0.587 + src[..., 0] * 0.114
 
 
 def mask_edge(src):
     src = u2f(src)
     short = src.shape[0]
 
-    a=0.5
+    a = 0.5
     src_norm = src / cv2.blur(src, k2(short*a))
     src_norm /= np.percentile(src_norm, 99.5)
-    gray = src_norm[...,0] ** 0.5 * src_norm[...,1] ** 2 * src_norm[...,2] ** 0.5
-    gray = np.clip(gray,0,5)
+    gray = src_norm[..., 0] ** 0.5 * \
+        src_norm[..., 1] ** 2 * src_norm[..., 2] ** 0.5
+    gray = np.clip(gray, 0, 5)
 
-    b=0.075
+    b = 0.075
     blur = cv2.blur(gray, k2(short*b/3))
     for __ in range(3):
         blur = cv2.blur(blur, k2(short*b/3))
     diff = gray - blur
 
-    c=0.05
+    c = 0.05
     diffblur = cv2.blur(np.abs(diff), k2(short*c/3))
     for __ in range(3):
         diffblur = cv2.blur(diffblur, k2(short*c/3))
-    diffblur /= np.percentile(diffblur,99.9)
+    diffblur /= np.percentile(diffblur, 99.9)
 
-    d=2
+    d = 2
     diff3 = diff - diffblur * d
 
-    e=0.15
-    diff4 = np.where(diff3>e, 255, 0)
-
+    e = 0.15
+    diff4 = np.where(diff3 > e, 255, 0)
 
     return diff4.astype(np.uint8)
 
@@ -723,17 +740,18 @@ def add(arr1, arr2):
     return 255 * arrout
 
 
-def norm(src:np.ndarray, th_lo:float=0.1, th_hi:float=99.9, skip:int=3,
-         dtype=float, rgb:bool=True, clip:bool=True) -> np.ndarray:
+def norm(src: np.ndarray, th_lo: float = 0.1, th_hi: float = 99.9,
+         skip: int = 3, dtype=float,
+         rgb: bool = True, clip: bool = True) -> np.ndarray:
     src_out = u2f(src)
     if ((src_out.shape[-1] == 3 and src_out.ndim == 3) or src_out.ndim == 2):
         src_out = src_out[None, ...]
 
-    src_perc = src_out[:,::skip,::skip,...]
+    src_perc = src_out[:, ::skip, ::skip, ...]
     if src_out.shape[-1] == 3 and rgb:
-            perc_lo = np.percentile(src_perc, th_lo, axis=(0,1,2))
-            perc_hi = np.percentile(src_perc, th_hi, axis=(0,1,2))
-            src_out = (src_out - perc_lo) / (perc_hi - perc_lo)
+        perc_lo = np.percentile(src_perc, th_lo, axis=(0, 1, 2))
+        perc_hi = np.percentile(src_perc, th_hi, axis=(0, 1, 2))
+        src_out = (src_out - perc_lo) / (perc_hi - perc_lo)
     else:
         perc_lo = np.percentile(src_perc, th_lo)
         perc_hi = np.percentile(src_perc, th_hi)
@@ -802,12 +820,14 @@ def uint2float(src):
 
     return src.copy()
 
+
 def u2f(src):
     return (uint2float(src))
 
 
 def r2b(src):
     return np.flip(src, axis=2)
+
 
 def compress_shadows(src, fixed, fac):
     if fac < 0:
@@ -835,23 +855,28 @@ def compress_highlights(src, fixed, fac):
 
     return src_out
 
-def inpaint(src, msk, radius=6):
-    msk = cv2.dilate(msk,k(radius))
 
-    if src.dtype in (float, np.float16): src = src.astype(np.float32)
+def inpaint(src, msk, radius=6):
+    msk = cv2.dilate(msk, k(radius))
+
+    if src.dtype in (float, np.float16):
+        src = src.astype(np.float32)
     src_out = np.empty_like(src)
     for _j in range(3):
-        src_out[...,_j] = cv2.inpaint(src[...,_j], msk, 1, cv2.INPAINT_NS)
+        src_out[..., _j] = cv2.inpaint(src[..., _j], msk, 1, cv2.INPAINT_NS)
 
     return src_out
 
-def histogram(src:np.ndarray, h_res:int=256, v_res:int=100,
-               col_range:tuple=(0.2,0.9),
-               in_fac:float=100, out_fac:float=100, rgb:bool=True) -> np.ndarray:
+
+def histogram(src: np.ndarray, h_res: int = 256, v_res: int = 100,
+              col_range: tuple = (0.2, 0.9), rgb: bool = True,
+              in_fac: float = 100, out_fac: float = 100) -> np.ndarray:
 
     src = resize(src, in_fac)
-    if not rgb and src.ndim == 3: src = bgr2gray(src)
-    if src.ndim == 2: src = src[..., None]
+    if not rgb and src.ndim == 3:
+        src = bgr2gray(src)
+    if src.ndim == 2:
+        src = src[..., None]
 
     src = u2f(src)
     src = np.clip(src, 0, 1)
@@ -878,7 +903,8 @@ def histogram(src:np.ndarray, h_res:int=256, v_res:int=100,
         out.append(draw)
 
     out = np.squeeze(np.array(out))
-    if out.ndim == 3: out = np.rollaxis(out, 0, 3)
+    if out.ndim == 3:
+        out = np.rollaxis(out, 0, 3)
     out = resize(out, out_fac)
 
     return out
@@ -941,14 +967,15 @@ def histogram(src:np.ndarray, h_res:int=256, v_res:int=100,
 #     return XYZ_to_Oklab(src)
 
 
-def calc_gamma(src, target_gamma:float=0.5):
+def calc_gamma(src, target_gamma: float = 0.5):
     if src.shape[-1] != 3:
         raise ValueError("Input image was not in color")
 
-    if src.ndim == 2: src = src[None,...]
+    if src.ndim == 2:
+        src = src[None, ...]
 
     src = u2f(src)
-    gammas = np.log(src.mean((0,1,2))) / np.log(target_gamma)
+    gammas = np.log(src.mean((0, 1, 2))) / np.log(target_gamma)
     gamma_max = gammas.max()
     gammas /= gamma_max
 

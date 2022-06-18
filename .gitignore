@@ -9,3 +9,4 @@ dist
 *.ini
 test.py
 gen_alg.py
+start
