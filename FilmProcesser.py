@@ -312,7 +312,7 @@ def main():
     chdir("original")
     flist = [file.lower() for file in listdir()]
 
-    if "params.ini" in flist and "proxy.npy" in flist:
+    if "params.ini" in flist:
         print("Se ha encontrado archivo de configuración")
         key = input("Recolorizar? [Y]/n: ").lower()
         while key.lower() not in ("y", "n", ""):
@@ -323,6 +323,11 @@ def main():
             need_proxy = 0
     else:
         need_proxy = 1
+
+    if need_proxy == 2:
+        params = unpack_params()
+        if "proxy.npy" not in flist or (params["vig"] and "vig.npy" not in flist):
+            need_proxy = 1
 
     imglist = []
     if need_vig and need_proxy:
@@ -517,16 +522,20 @@ def main():
     #     img_process(_img)
 
     chdir(filename)
-    if "img" in dir():
-        del_files = input(f"Desea eliminar los archivo proxy? ({round(img.nbytes/10**6)}Mb)\n"
-                          "y/[N]: ")
+    if "proxy.npy" in listdir("original"):
+        if "img" in dir():
+            del_files = input(f"Desea eliminar los archivo proxy? ({round(img.nbytes/10**6)}Mb)\n"
+                              "y/[N]: ")
+        else:
+            del_files = input("Desea eliminar los archivo proxy?\n"
+                              "y/[N]: ")
+        while del_files not in ("y", "n", ""):
+            del_files = input("y/n: ").lower()
+        if del_files == "y":
+            f.cmd("del original\\proxy.npy")
     else:
-        del_files = input("Desea eliminar los archivo proxy?\n"
-                          "y/[N]: ")
-    while del_files not in ("y", "n", ""):
-        del_files = input("y/n: ").lower()
-    if del_files == "y":
-        f.cmd("del original\\*.npy")
+        print("Proceso terminado")
+        input("Aprete cualquier tecla para finalizar...")
 
 
 if __name__ == "__main__":
