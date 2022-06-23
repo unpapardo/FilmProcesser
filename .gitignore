@@ -7,6 +7,6 @@ build
 dist
 *.bat
 *.ini
-test.py
+test*
 gen_alg.py
 start

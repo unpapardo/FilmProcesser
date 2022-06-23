@@ -5,6 +5,7 @@ from time import sleep
 from multiprocessing import Pool, freeze_support
 from configparser import ConfigParser
 import warnings
+import traceback
 import pickle
 import sys
 import signal
@@ -14,10 +15,10 @@ import cv2
 import tqdm
 import funcs as f
 from exiftool import ExifTool
-from copy import deepcopy as copy  # for debugging
-from funcs import show, kill_cv2, show2  # for debugging
+# from copy import deepcopy as copy  # for debugging
+# from funcs import show, kill_cv2, show2  # for debugging
 
-__version__ = 0.04
+__version__ = "0.04b"
 
 formats = [
     "crw",
@@ -204,6 +205,13 @@ def read_proxy(name):
     except KeyboardInterrupt:
         sys.exit()
 
+
+def read_thumb(name):
+    try:
+        return f.thumb(name)
+    except KeyboardInterrupt:
+        sys.exit()
+
 # %% main defs
 
 
@@ -291,6 +299,8 @@ def main():
             break
         except FileNotFoundError:
             print("Carpeta no válida")
+    # extension = "cr2"
+    # filename = r"c:/new/new"
 
     chdir(filename)
     if "original" not in listdir():
@@ -332,27 +342,14 @@ def main():
         if file[-3:] == extension and "vig" not in file.lower():
             imglist.append(file)
 
-    # %% proxy loading
+    # %% EXIF reading
     if need_proxy == 1:
-        print("Leyendo RAWs...")
-        # maybe specify max amount of processes
-        with Pool(processes=None, initializer=init_pool_read) as exe:
-            img = []
-            for _res in exe.imap(read_proxy, imglist):
-                img.append(_res)
-            img = np.array(img)
-        if img.ndim == 3:
-            img = img[None, ...]
-
-        with rp.imread(imglist[0]) as raw:
-            black_level = raw.black_level_per_channel[0]
-        # black_level = 0
-
         with ExifTool(path.join(original_path, "exiftool.exe")) as et:
             meta = []
             for _img in imglist:
                 meta.append(et.execute_json(_img)[0])
 
+        continue_exif = True
         try:
             exp_shutter = np.array(
                 [float(item["EXIF:ExposureTime"]) for item in meta])
@@ -365,9 +362,9 @@ def main():
             print("Por favor reportar este problema e indicar el modelo de cámara")
             input("Presione cualquier tecla para continuar con el programa...")
             print("----------")
-            exp_ev = [None]
+            continue_exif = False
 
-        if exp_ev is not None:
+        if continue_exif:
             with warnings.catch_warnings():
                 warnings.filterwarnings('error')
                 try:
@@ -380,10 +377,10 @@ def main():
                     print("Puede suceder por usar lentes manuales o defectuosos")
                     input("Presione cualquier tecla para continuar con el programa...")
                     print("----------")
-                    exp_ev = [None]
+                    continue_exif = False
 
         need_exp = False
-        if len(set(exp_ev)) > 1:
+        if continue_exif and len(set(exp_ev)) > 1:
             print("Advertencia: se han encontrado diferentes valores de exposición")
             key = input("Desea normalizar exposiciones? [Y]/n: ").lower()
             while 1:
@@ -393,59 +390,50 @@ def main():
                 if key == "n":
                     break
 
-        # img0=copy(img) #for debugging purposes
-        # %% proxy cropping
+        # %% thumb loading and cropping
+        print("Leyendo miniaturas de recorte...")
+        # maybe specify max amount of processes
+        thumbs = []
+        with Pool(processes=None, initializer=init_pool_read) as exe:
+            for _res in exe.imap(read_thumb, imglist):
+                thumbs.append(_res)
+            thumbs = np.array(thumbs)
+        if thumbs.ndim == 3:
+            thumbs = thumbs[None, ...]
         # crop is (y1,y2,x1,x2)
-        crop = []
+        # crop = []
         if need_crop:
-            for i in range(2):
-                crop_bool = np.sum(np.sum(img[0].astype(
-                    int)-black_level, axis=2), axis=(1-i))
-                crop_bool = np.divide(crop_bool, np.percentile(crop_bool, 75))
-                crop_bool = (crop_bool > 0.6).astype(int)
-                crop_bool = np.diff(crop_bool)
-                crop_bool2 = crop_bool.nonzero()[0]
-                if len(crop_bool2) == 0:
-                    crop.append([0, img.shape[1+i]])
-                elif len(crop_bool2) == 1:
-                    # -1 is true to false (start crop region)
-                    if crop_bool[crop_bool2[0]] == -1:
-                        # add cropping region warnings if needed
-                        crop.append([0, crop_bool2[0]])
-                    # 1 is false to true (end crop region)
-                    else:
-                        crop.append([crop_bool2[0], img.shape[1+i]])
-                else:
-                    if crop_bool[crop_bool2[0]] == 1 and crop_bool[crop_bool2[-1]] == -1:
-                        crop.append([crop_bool2[0], crop_bool2[-1]])
-                    else:
-                        crop.append([0, img.shape[1+i]])
-            crop = np.array(crop).flatten()
-
             print("----------")
             print("Previsualización de recorte...")
             print("Apretar Esc o Enter para cerrar")
-            temp_img = f.resize(img[need_vig:], dim2=reduce_height)
-            temp_img = f.norm(65535-temp_img,
-                              th_lo=10, th_hi=90, skip=4).astype(np.float16)
-            crop_temp = np.array(
-                [dim * reduce_height / img.shape[1] for dim in crop])
-            crop = f.show_crop(temp_img, coords=crop_temp)
-            del temp_img
-
+            crop = f.show_crop(thumbs[need_vig:], dim2=reduce_height)
+            crop2 = [dim//2 for dim in crop]  # bc proxies are half-size
+            del thumbs
         else:
             crop = [None] * 4
 
-        crop = (crop * img.shape[1] / reduce_height).astype(int)
-        img = img[:, slice(*crop[:2]), slice(*crop[2:])]
-        # bc it was half-sized
-        crop = [dim*2 if dim is not None else None for dim in crop]
-        img = f.resize(img, dim2=reduce_height)
+        # %% proxy read
+        print("Leyendo RAWs...")
+        img = []
+        # maybe specify max amount of processes
+        with Pool(processes=None, initializer=init_pool_read) as exe:
+            for _res in exe.imap(read_proxy, imglist):
+                _res = _res[slice(*crop2[:2]), slice(*crop2[2:])]
+                _res = f.resize(_res, dim2=reduce_height)
+                img.append(_res)
+        img = np.array(img)
+
+        if img.ndim == 3:
+            img = img[None, ...]
+
+        with rp.imread(imglist[0]) as raw:
+            black_level = raw.black_level_per_channel[0]
 
         # %% proxy process
         img = img / 65535
         img -= (black_level / 65535)
         if need_exp:
+            print("Corrigiendo exposición...")
             img *= 2**exp_ev[:, None, None, None]
 
         if need_vig:
@@ -468,16 +456,13 @@ def main():
             print("Aplicando corrección de luminosidad...")
             img = np.divide(img, vig)
 
-        print("Obteniendo percentiles extremos...")
+        print("Obteniendo valores extremos...")
         img = 1-img
         img_mins = np.percentile(img, 0.055, axis=(0, 1, 2))
         img_maxs = np.percentile(img, 99.75, axis=(0, 1, 2))
 
         print("Normalizando...")
         img = (img - img_mins) / (img_maxs - img_mins)
-
-        print("Calculando gammas automáticamente...")
-        gamma_pre = f.calc_gamma(img)
 
         print("Guardando proxies...")
         np.save("proxy.npy", img.astype(np.float32))
@@ -493,13 +478,13 @@ def main():
         img_mins = params["mins"]
         img_maxs = params["maxs"]
 
+    if need_proxy:
         print("Calculando gammas automáticamente...")
         gamma_pre = f.calc_gamma(img)
 
-    if need_proxy:
         print("Obteniendo valores de colorización...")
         print("Apretar Esc o Enter para cerrar")
-        color = f.ccmGamma(img, dim2=reduce_height, init_gamma=gamma_pre)
+        color = f.ccmGamma(img, init_gamma=gamma_pre)
 
         pack_params()
 
@@ -556,3 +541,13 @@ if __name__ == "__main__":
         print("Cerrando programa...")
         sleep(2)
         sys.exit()
+    except:
+        f.kill_process("exiftool.exe")
+        print()
+        print("--------------")
+        print("Error fatal detectado")
+        print("Por favor notificar el siguiente problema:")
+        print()
+        print(traceback.format_exc())
+        print("--------------")
+        input("Aprete cualquier tecla para finalizar...")

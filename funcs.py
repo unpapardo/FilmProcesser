@@ -5,10 +5,11 @@ Created on Sat Jun 19 13:30:13 2021
 @author: mpardo
 """
 
-from time import sleep
+# from time import sleep
 from subprocess import run as sub_run
 import cv2
 import numpy as np
+import rawpy as rp
 import warnings
 import psutil
 import functools
@@ -103,26 +104,25 @@ def show2(src):
     show(src, fac=None, dim1=None, dim2=720)
 
 
-_pressed = False
-
-
 @kill_cv2_on_error
 def show_crop(src, fac=100, dim1: int = None, dim2: int = None,
               verbose=False, coords=None) -> tuple:
     # crop is (y1,y2,x1,x2)
     # cv2 rectangle is (x1,y1), (x2,y2)
+    _pressed = mode = y_check = x_check = x0 = y0 = None
+
     def mouse_click(event, x, y, flags, param):
-        global coord_change
-        global _pressed
-        global mode
-        global y_check, x_check
-        global x0, y0
+        nonlocal coord_change
+        nonlocal _pressed
+        nonlocal mode
+        nonlocal y_check, x_check
+        nonlocal x0, y0
 
         if event == cv2.EVENT_LBUTTONDOWN:
             _pressed = True
             x_check = 0
             y_check = 0
-            mode = None
+
             if np.abs(y - coords[0]) < 10:
                 y_check = 1
             elif np.abs(y - coords[1]) < 10:
@@ -163,6 +163,8 @@ def show_crop(src, fac=100, dim1: int = None, dim2: int = None,
 
         elif event == cv2.EVENT_LBUTTONUP:
             _pressed = False
+            coords[:2] = np.clip(coords[:2], 2, temp.shape[0] - 2)
+            coords[2:] = np.clip(coords[2:], 2, temp.shape[1] - 2)
 
     # crop is (y1,y2,x1,x2)
     # cv2 rectangle is (x1,y1), (x2,y2)
@@ -180,7 +182,8 @@ def show_crop(src, fac=100, dim1: int = None, dim2: int = None,
     if coords is None:
         src_check = resize(src[0], fac, dim1, dim2)
         coords = np.array(
-            (50, src_check.shape[0]-50, 50, src_check.shape[1]-50))
+            (src_check.shape[0] * 0.02, src_check.shape[0] * 0.98,
+             src_check.shape[1] * 0.02, src_check.shape[1] * 0.98)).astype(int)
     else:
         coords = np.array(coords, dtype=int)
         if dim1 is not None:
@@ -243,7 +246,7 @@ def resize(src: np.ndarray, fac: float = None,
 
     if (isinstance(src, np.ndarray) and (src.ndim == 2
                                          or (src.ndim == 3 and src.shape[-1] == 3))):
-        if fac is not None and dim1 is None and dim2 is None:
+        if fac is not None and (dim1, dim2) == (None, None):
             if fac == 100:
                 return src
             if fac > 100 and no_upsize:
@@ -318,24 +321,39 @@ def CCM(src_arr, ccm):
     return src_arr
 
 
+# def gamma(src, gammaA, gammaB=None, gammaG=None, gammaR=None):
+#     if gammaB and gammaG and gammaR:
+#         vec_gamma = np.array([gammaB, gammaG, gammaR]) * gammaA
+#         if src.ndim == 4:
+#             vec_gamma = vec_gamma[None, ...]
+#         # with np.errstate(invalid='ignore'):
+#             # src = np.power(src, 1 / vec_gamma)
+#         with warnings.catch_warnings():
+#             warnings.filterwarnings('ignore')
+#             src = np.exp(np.log(src) / vec_gamma)  # equivalent but faster
+
+#     else:
+#         with warnings.catch_warnings():
+#             warnings.filterwarnings('ignore')
+#             src = np.exp(np.log(src) / gammaA)
+
+#     src[np.isnan(src)] = 0
+#     return src
+
+
 def gamma(src, gammaA, gammaB=None, gammaG=None, gammaR=None):
-    if gammaB and gammaG and gammaR:
+    src_out = np.empty_like(src)
+    if gammaB and gammaG and gammaR and src.shape[-1] == 3:
         vec_gamma = np.array([gammaB, gammaG, gammaR]) * gammaA
-        if src.ndim == 4:
-            vec_gamma = vec_gamma[None, ...]
-        # with np.errstate(invalid='ignore'):
-            # src = np.power(src, 1 / vec_gamma)
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore')
-            src = np.exp(np.log(src) / vec_gamma)  # equivalent but faster
+        vec_gamma = 1 / vec_gamma
+        for _j in range(3):
+            src_out[..., _j] = cv2.pow(src[..., _j], vec_gamma[_j])
 
     else:
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore')
-            src = np.exp(np.log(src) / gammaA)
+        src_out = cv2.pow(src, 1 / gammaA)
 
-    src[np.isnan(src)] = 0
-    return src
+    src_out[np.isnan(src_out)] = 0
+    return src_out
 
 
 @kill_cv2_on_error
@@ -980,3 +998,12 @@ def calc_gamma(src, target_gamma: float = 0.5):
     gammas /= gamma_max
 
     return np.array((gamma_max, *gammas))
+
+
+def thumb(filename, fac=100, dim1=None, dim2=None):
+    with rp.imread(filename) as raw:
+        thumb = raw.extract_thumb().data
+    src = cv2.imdecode(np.frombuffer(thumb, dtype=np.uint8), -1)
+    src = resize(src, fac, dim1, dim2)
+
+    return src
